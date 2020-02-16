@@ -3,12 +3,15 @@
  * @author EThan Lew
  */
 
+
 #include <Wire.h>
 //#include "BluetoothSerial.h"
 #include "PID_v1.h"
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "SAMD21turboPWM.h"
+#include "./pid_control/pid_control.h"
+
 
 //#include <WiFi.h>
 
@@ -82,8 +85,9 @@ double inputy, outputy;
 double Kpy = 15;
 double Kdy = 2;
 double Kiy = 0;
-PID pidTilt(&input, &output, &setpoint, Kpt, Kit, Kdt, DIRECT);
-PID pidYaw(&inputy, &outputy, &setpointy, Kpy, Kiy, Kdy, DIRECT);
+//PID pidTilt(&input, &output, &setpoint, Kpt, Kit, Kdt, DIRECT);
+//PID pidYaw(&inputy, &outputy, &setpointy, Kpy, Kiy, Kdy, DIRECT);
+PIDController pidTilt = new_pid(Kpt, Kit, Kdt);
 
 float curr =  0x7FFFFFFF;
 float prev =  0x7FFFFFFF;
@@ -123,7 +127,7 @@ uint16_t tiltNumber, yawNumber;
 
 //BluetoothSerial SerialBT;
 
-TurboPWM pwm; //
+TurboPWM pwm;
  
 void setup() {
   /* Create Bluetooth Serial */
