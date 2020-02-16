@@ -4,26 +4,25 @@
  */
 
 #include <Wire.h>
-#include "BluetoothSerial.h"
+//#include "BluetoothSerial.h"
 #include "PID_v1.h"
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
+#include "SAMD21turboPWM.h"
 
 //#include <WiFi.h>
 
 /* MACROS */
 #define SERIAL_BAUD 115200
-#define I2C_SDA_PIN 21
-#define I2C_SCL_PIN 22
 #define I2C_FAST_MODE 400000 
-#define MPU_INT 19
+#define MPU_INT 8
 /* Dual H-bridge macros */
-#define DR0 16
-#define PWM0 4
-#define NEN0 0
-#define DR1 18
-#define PWM1 5
-#define NEN1 17
+#define DR0 6
+#define PWM0 2
+#define PWM1 3
+#define NEN0 4
+#define DR1 7
+#define NEN1 5
 
 
 /* System Tuning */
@@ -122,15 +121,17 @@ size_t len;
 */
 uint16_t tiltNumber, yawNumber;
 
-BluetoothSerial SerialBT;
+//BluetoothSerial SerialBT;
+
+TurboPWM pwm; //
  
 void setup() {
   /* Create Bluetooth Serial */
-  SerialBT.begin("OTIS-BOT");
+  //SerialBT.begin("OTIS-BOT");
   /* Set the serial baud rate*/
   Serial.begin(SERIAL_BAUD);
   /* Setup the I2C bus */
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, I2C_FAST_MODE);
+  Wire.setClock(I2C_FAST_MODE);
   /* Setup the IMU and relevant buffers */
   initialize_ypr();
   /* Setup the motors */
@@ -165,7 +166,7 @@ void loop() {
     setpointy = ypr[0];
   }
 
-  if (SerialBT.available() > 0)
+/*  if (SerialBT.available() > 0)
   {
     SerialBT.readBytes(remote_buff, 4);
 
@@ -191,7 +192,7 @@ void loop() {
     //Serial.print(setpoint);
    // Serial.print(" ");
     //Serial.println(setpointy);
-  }
+  }*/
 
 /*
  client = server.available();
@@ -269,8 +270,8 @@ void loop() {
   Serial.print(" ");
   Serial.println(wraptopi(setpoint - ypr[1]));
   
-  pidTilt.Compute();
-  pidYaw.Compute();
+  pidTilt.Compute();  //Compute Tilt PID
+  pidYaw.Compute();   //Compute Yaw PID
 
   out0 = output - outputy;
   out1 = output + outputy;
@@ -287,21 +288,25 @@ void loop() {
     digitalWrite(DR1, false);
   }
 
-  double duty_mag0 = abs(255.0/50.0*min((double)50, abs(out0)));
-  double duty_mag1 = abs(255.0/50.0*min((double)50, abs(out1)));
-  dutyCycle0 = (uint8_t)duty_mag0;
-  dutyCycle1 = (uint8_t)duty_mag1;
+  double duty_mag0 = abs(1000.0/50.0*min((double)50, abs(out0)));
+  Serial.print(duty_mag0);
+  double duty_mag1 = abs(1000.0/50.0*min((double)50, abs(out1)));
+ // dutyCycle0 = (uint8_t)duty_mag0;
+ // dutyCycle1 = (uint8_t)duty_mag1;
 
   if(fabs(input) < 0.6){
-    ledcWrite(pwmChannel1, dutyCycle1); 
-    ledcWrite(pwmChannel0, dutyCycle0);
+    pwm.analogWrite(2, duty_mag0);
+    pwm.analogWrite(3, duty_mag1);
+    Serial.print(duty_mag0);
+    Serial.print(duty_mag1);
+    
   } else {
-    ledcWrite(pwmChannel0, 0); 
-    ledcWrite(pwmChannel1, 0);
+    pwm.analogWrite(2, 0);
+    pwm.analogWrite(3, 0);
   }
 
   
-/*
+/* 
   Serial.print(ypr[0]);
   Serial.print(" ");
   Serial.print(ypr[1]);
@@ -368,12 +373,18 @@ void initialize_pwm(){
   digitalWrite(NEN0, 1);
   digitalWrite(DR1, dir);
   digitalWrite(DR0, !dir);
+  
 
+  pwm.setClockDivider(1, false); //
+  pwm.timer(1, 1, 800, false); //240kHz/8, 30Khz
+
+  
+/* 
   ledcSetup(pwmChannel0, freq, resolution);  
   ledcSetup(pwmChannel1, freq, resolution);  
   ledcAttachPin(PWM1, pwmChannel1);
-  ledcAttachPin(PWM0, pwmChannel0);
-}
+  ledcAttachPin(PWM0, pwmChannel0);*/
+  }
 
 void initialize_ypr(){
   /* Initialize the MPU */
