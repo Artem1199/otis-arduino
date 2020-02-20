@@ -76,14 +76,14 @@ double movingAngleOffset = 0.1;
 double input, output;
 double input_old, output_old;
 
-double errSum, lastTime, lastInput= 0, outputSum= 0;
+double errSum, lastTime, lastInput= 0, outputSum = 0;
 
-//double Kpt = 90;
-//double Kdt = 7;
-//double Kit = 100;
-double Kpt = 120;
-double Kdt = 5;
-double Kit = 150;
+double Kpt = 40;
+double Kdt = 10;
+double Kit = 60;
+//double Kpt = 120;
+//double Kdt = 5;
+//double Kit = 150;
 
 
 
@@ -94,8 +94,8 @@ double Kpy = 15;
 double Kdy = 2;
 double Kiy = 0;
 double errSumy, lastTimey, lastInputy = 0, outputSumy = 0;
-PID pidTilt(&input_old, &output_old, &setpoint, Kpt, Kit, Kdt, DIRECT);
-PID pidYaw(&inputy_old, &outputy_old, &setpointy, Kpy, Kiy, Kdy, DIRECT);
+//PID pidTilt(&input_old, &output_old, &setpoint, Kpt, Kit, Kdt, DIRECT);
+//PID pidYaw(&inputy_old, &outputy_old, &setpointy, Kpy, Kiy, Kdy, DIRECT);
 
 float curr =  0x7FFFFFFF;
 float prev =  0x7FFFFFFF;
@@ -148,20 +148,21 @@ void setup() {
   /* Set the serial baud rate*/
   Serial.begin(SERIAL_BAUD);
   /* Setup the I2C bus */
-  Wire.setClock(I2C_FAST_MODE);
+  //Wire.setClock(I2C_FAST_MODE);
+  Wire.begin();
   /* Setup the IMU and relevant buffers */
   initialize_ypr();
   /* Setup the motors */
   initialize_pwm();
   Serial.print("Started");
   /* Setup PID */
-    pidTilt.SetMode(AUTOMATIC);
-    pidTilt.SetSampleTime(10);
-    pidTilt.SetOutputLimits(-255, 255);
+   // pidTilt.SetMode(AUTOMATIC);
+   // pidTilt.SetSampleTime(10);
+   // pidTilt.SetOutputLimits(-255, 255);
 
-    pidYaw.SetMode(AUTOMATIC);
-    pidYaw.SetSampleTime(10);
-    pidYaw.SetOutputLimits(-255, 255);
+   // pidYaw.SetMode(AUTOMATIC);
+   // pidYaw.SetSampleTime(10);
+   // pidYaw.SetOutputLimits(-255, 255);
 
   /* Setup the AP */
   //WiFi.mode(WIFI_AP);
@@ -308,13 +309,19 @@ void loop() {
    // Serial.print(output_old);
 //  outputy = compute_PIDC(&pidYaw, millis(), input);
   //Serial.print(" outputy: ");
- // Serial.print(outputy);
-   // Serial.print(" outputy_old ");
-   // Serial.print(outputy_old);
-   // Serial.print("\n");
+  //Serial.print(outputy);
+   // Serial.print(" outputy_old: ");
+    //Serial.print(outputy_old);
+
+  Serial.print("input: ");
+  Serial.print(ypr[1]);
 
   out0 = output - outputy;
   out1 = output + outputy;
+  Serial.print(" out0: ");
+  Serial.print(out0);
+  Serial.print(" out1: ");
+  Serial.println(out1);
 
   if (out0 > 0.0) {
     digitalWrite(DR0, false);

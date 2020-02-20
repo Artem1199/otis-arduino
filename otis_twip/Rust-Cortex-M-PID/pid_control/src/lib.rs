@@ -121,26 +121,23 @@ pub extern "C" fn compute_pid(Input: f64, Output: &mut f64, Setpoint: f64, Kp: f
         let error = wraptopi_r(Setpoint - Input);
         let dInput = Input - *lastInput;
 
-        *outputSum += Ki * error * 0.1;
+        //*outputSum += Ki * error * 0.01;
 
-        if *outputSum > 255.0 
-            {*outputSum = 255.0;}
-        else if *outputSum < -255.0
-            {*outputSum = -255.0;}
+        if *outputSum > 1000.0 
+            {*outputSum = 1000.0;}
+        else if *outputSum < -1000.0
+            {*outputSum = -1000.0;}
 
+        *Output = Kp * error + Ki * error * 0.01 - Kd * dInput * 100.0;
 
-
-        *Output = Kp * error + *outputSum - Kd * dInput * 10.0;
-
-        if *Output > 255.0 {*Output = 255.0;}
-            else if*Output < -255.0 {*Output = 255.0;}
+        if *Output > 1000.0 {*Output = 1000.0;}
+            else if *Output < -1000.0 {*Output = -1000.0;}
 
         *lastInput = Input;
         *lastTime = now;
     }
         
 } 
-
 
 #[no_mangle]
 pub extern "C" fn wraptopi_r(x: f64)-> f64{
@@ -152,14 +149,6 @@ pub extern "C" fn wraptopi_r(x: f64)-> f64{
     }
     ans
 }
-
-
-
-
-
-
-
-
 
 
 //allocation error handling

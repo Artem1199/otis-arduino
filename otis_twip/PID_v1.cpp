@@ -67,7 +67,7 @@ bool PID::Compute()
       /* elew */
       double error = wraptopi(*mySetpoint - input);
       double dInput = (input - lastInput);
-      outputSum+= (ki * error);
+      outputSum += (ki * error);
 
       /*Add Proportional on Measurement, if P_ON_M is specified*/
       if(!pOnE) outputSum-= kp * dInput;
