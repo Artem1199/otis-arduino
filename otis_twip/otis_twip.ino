@@ -78,21 +78,25 @@ double input_old, output_old;
 
 double errSum, lastTime, lastInput= 0, outputSum = 0;
 
-double Kpt = 40;
-double Kdt = 10;
-double Kit = 60;
-//double Kpt = 120;
-//double Kdt = 5;
-//double Kit = 150;
+//double Kpt = 90;
+//double Kit = 100;
+//double Kdt = 7;
+
+double Kpt = 120;
+double Kit = 150;
+double Kdt = 5;
+
 
 
 
 double setpointy = 100.0;
 double inputy, outputy;
 double inputy_old, outputy_old;
+
 double Kpy = 15;
-double Kdy = 2;
 double Kiy = 0;
+double Kdy = 2;
+
 double errSumy, lastTimey, lastInputy = 0, outputSumy = 0;
 //PID pidTilt(&input_old, &output_old, &setpoint, Kpt, Kit, Kdt, DIRECT);
 //PID pidYaw(&inputy_old, &outputy_old, &setpointy, Kpy, Kiy, Kdy, DIRECT);
@@ -140,15 +144,14 @@ TurboPWM pwm;
 
 
 void setup() {
-  //PIDC &pidTilt = *create_PIDC(Kpt, Kdt, Kit);
-  //PIDC &pidYaw = *create_PIDC(Kpy, Kdy, Kiy);
 
   /* Create Bluetooth Serial */
   //SerialBT.begin("OTIS-BOT");
   /* Set the serial baud rate*/
   Serial.begin(SERIAL_BAUD);
+  delay(1000);
   /* Setup the I2C bus */
-  //Wire.setClock(I2C_FAST_MODE);
+  Wire.setClock(I2C_FAST_MODE);
   Wire.begin();
   /* Setup the IMU and relevant buffers */
   initialize_ypr();
@@ -156,13 +159,13 @@ void setup() {
   initialize_pwm();
   Serial.print("Started");
   /* Setup PID */
-   // pidTilt.SetMode(AUTOMATIC);
-   // pidTilt.SetSampleTime(10);
-   // pidTilt.SetOutputLimits(-255, 255);
+    //pidTilt.SetMode(AUTOMATIC);
+    //pidTilt.SetSampleTime(10);
+    //pidTilt.SetOutputLimits(-255, 255);
 
-   // pidYaw.SetMode(AUTOMATIC);
-   // pidYaw.SetSampleTime(10);
-   // pidYaw.SetOutputLimits(-255, 255);
+    //pidYaw.SetMode(AUTOMATIC);
+    //pidYaw.SetSampleTime(10);
+    //pidYaw.SetOutputLimits(-255, 255);
 
   /* Setup the AP */
   //WiFi.mode(WIFI_AP);
@@ -179,6 +182,8 @@ void setup() {
 
 void loop() {
 
+  //Serial.print(" BP A ");
+
   fetch_ypr();
   input = ypr[1];
   inputy = ypr[0];
@@ -187,7 +192,7 @@ void loop() {
     setpointy = ypr[0];
   }
 
-
+ // Serial.print(" BP B ");
   //
   /*  if (SerialBT.available() > 0)
     {
@@ -292,12 +297,12 @@ void loop() {
   //Serial.print(" inputy: ");
   //Serial.print(inputy);
   
-
+  //Serial.print(" BP C ");
   //pidTilt.Compute();  //Compute Tilt PID
   //pidYaw.Compute();   //Compute Yaw PID
 
 
- 
+   //Serial.print(" BP D ");
   
   compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, millis(), &lastTime, 10, &lastInput, &outputSum);
   compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, millis(), &lastTimey, 10, &lastInputy, &outputSumy);
@@ -312,7 +317,7 @@ void loop() {
   //Serial.print(outputy);
    // Serial.print(" outputy_old: ");
     //Serial.print(outputy_old);
-
+  //Serial.print(" BP E ");
   Serial.print("input: ");
   Serial.print(ypr[1]);
 
@@ -328,7 +333,7 @@ void loop() {
   } else {
     digitalWrite(DR0, true);
   }
-
+  //Serial.print(" BP F ");
   if (out1 > 0.0) {
     digitalWrite(DR1, true);
   } else {
@@ -353,7 +358,7 @@ void loop() {
     pwm.analogWrite(PWM1, 0);
   }
 
-
+  // Serial.println(" BP G ");
   /*
     Serial.print(ypr[0]);
     Serial.print(" ");
@@ -457,7 +462,7 @@ void initialize_ypr() {
     Serial.println(F("Enabling DMP..."));
     mpu.setDMPEnabled(true);
     /* Enable Interrupt Detection */
-    Serial.println(F("Enabling interrupt detection (ESP32 pin 32)..."));
+    Serial.println(F("Enabling interrupt detection (MKR1010 PIN 8)..."));
     pinMode(MPU_INT, INPUT_PULLUP);
     attachInterrupt(MPU_INT, dmpDataReady, RISING);
     mpuIntStatus = mpu.getIntStatus();
@@ -494,7 +499,7 @@ void fetch_ypr() {
   {
     /* reset so we can continue cleanly */
     mpu.resetFIFO();
-    Serial.println(F("FIFO overflow!"));
+    Serial.println(F("********************************* FIFO overflow!********************************* "));
   }
   else if (mpuIntStatus & 0x02)
   {
