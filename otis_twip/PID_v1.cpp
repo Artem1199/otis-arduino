@@ -84,7 +84,7 @@ bool PID::Compute()
       output += outputSum - kd * dInput;
 
 	    if(output > outMax) output = outMax;
-      else if(output < outMin) output = outMin;
+      else if(output < outMin) output= outMin;
 	    *myOutput = output;
 
       /*Remember some variables for next time*/

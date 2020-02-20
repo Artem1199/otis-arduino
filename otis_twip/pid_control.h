@@ -18,12 +18,29 @@
 /// range of values. By default, all limits are set to +/- infinity.
 ///
 /// `d_mode` The `DerivativeMode`, the default is `OnMeasurement`.
-struct PIDController;
+struct PIDController {
+  /// Proportional gain
+  double p_gain;
+  /// Integral gain
+  double i_gain;
+  /// Differential gain,
+  double d_gain;
+  double target;
+  double i_min;
+  double i_max;
+  double out_min;
+  double out_max;
+  double err_sum;
+  double prev_value;
+  double prev_error;
+};
 
 extern "C" {
 
+int32_t foo();
+
 /// Creates a new PID Controller.
-PIDController new(double p_gain, double i_gain, double d_gain);
+PIDController new_pid(double p_gain, double i_gain, double d_gain);
 
 /// Convenience function to set `i_min`/`i_max` and `out_min`/`out_max`
 /// to the same values simultaneously.

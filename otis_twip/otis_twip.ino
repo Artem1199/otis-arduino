@@ -1,7 +1,7 @@
 /*
- * OTIS Two Wheeled Self Balancing Robot
- * @author EThan Lew
- */
+   OTIS Two Wheeled Self Balancing Robot
+   @author EThan Lew
+*/
 
 
 #include <Wire.h>
@@ -10,22 +10,24 @@
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "SAMD21turboPWM.h"
-#include "./pid_control/pid_control.h"
+#include <pid_control.h>
 
 
 //#include <WiFi.h>
 
 /* MACROS */
 #define SERIAL_BAUD 115200
-#define I2C_FAST_MODE 400000 
+#define I2C_FAST_MODE 400000
 #define MPU_INT 8
 /* Dual H-bridge macros */
-#define DR0 6
+#define DR1 5
+#define PWM1 4
+#define NEN1 3
+
 #define PWM0 2
-#define PWM1 3
-#define NEN0 4
-#define DR1 7
-#define NEN1 5
+#define DR0 1
+#define NEN0 0
+
 
 
 /* System Tuning */
@@ -33,7 +35,7 @@ uint16_t gyro_bias[] = {10, 7, 14};
 uint16_t accel_z_bias = 900;
 
 /* MPU6050 Device Context */
-MPU6050 mpu; 
+MPU6050 mpu;
 
 /* MPU control/status vars */
 bool dmpReady = false;  // set true if DMP init was successful
@@ -49,13 +51,13 @@ uint8_t prevDuty = 0;
 float angle, angular_rate;
 
 /* orientation/motion vars */
-Quaternion q;          
-VectorFloat gravity;   
-int16_t gyro[3];        
-float ypr[3];      
+Quaternion q;
+VectorFloat gravity;
+int16_t gyro[3];
+float ypr[3];
 
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
-void dmpDataReady(){
+void dmpDataReady() {
   mpuInterrupt = true;
 }
 
@@ -72,6 +74,9 @@ double originalSetpoint = -0.05;
 double setpoint = originalSetpoint;
 double movingAngleOffset = 0.1;
 double input, output;
+double input_old, output_old;
+
+double errSum, lastTime, lastInput= 0, outputSum= 0;
 
 //double Kpt = 90;
 //double Kdt = 7;
@@ -80,14 +85,17 @@ double Kpt = 120;
 double Kdt = 5;
 double Kit = 150;
 
+
+
 double setpointy = 100.0;
 double inputy, outputy;
+double inputy_old, outputy_old;
 double Kpy = 15;
 double Kdy = 2;
 double Kiy = 0;
-//PID pidTilt(&input, &output, &setpoint, Kpt, Kit, Kdt, DIRECT);
-//PID pidYaw(&inputy, &outputy, &setpointy, Kpy, Kiy, Kdy, DIRECT);
-PIDController pidTilt = new_pid(Kpt, Kit, Kdt);
+double errSumy, lastTimey, lastInputy = 0, outputSumy = 0;
+PID pidTilt(&input_old, &output_old, &setpoint, Kpt, Kit, Kdt, DIRECT);
+PID pidYaw(&inputy_old, &outputy_old, &setpointy, Kpy, Kiy, Kdy, DIRECT);
 
 float curr =  0x7FFFFFFF;
 float prev =  0x7FFFFFFF;
@@ -97,11 +105,11 @@ float diff = 0.0;
 /* Motor output */
 double out0, out1;
 
-uint8_t remote_buff[4]; 
+uint8_t remote_buff[4];
 const uint16_t* remote_16 = (const uint16_t*)remote_buff;
 
 /* Serial In */
-String serBuff = ""; 
+String serBuff = "";
 
 /* Websockets Control */
 
@@ -113,23 +121,28 @@ String serBuff = "";
 
 #define IS_SERVER
 
-enum Protocol{
-    TILT_SET, 
-    YAW_SET
+enum Protocol {
+  TILT_SET,
+  YAW_SET
 };
 
 /*
-WiFiServer server(SERVER_PORT);
-WiFiClient client;
-size_t len;
+  WiFiServer server(SERVER_PORT);
+  WiFiClient client;
+  size_t len;
 */
 uint16_t tiltNumber, yawNumber;
 
 //BluetoothSerial SerialBT;
 
 TurboPWM pwm;
- 
+
+
+
 void setup() {
+  //PIDC &pidTilt = *create_PIDC(Kpt, Kdt, Kit);
+  //PIDC &pidYaw = *create_PIDC(Kpy, Kdy, Kiy);
+
   /* Create Bluetooth Serial */
   //SerialBT.begin("OTIS-BOT");
   /* Set the serial baud rate*/
@@ -140,25 +153,28 @@ void setup() {
   initialize_ypr();
   /* Setup the motors */
   initialize_pwm();
-
+  Serial.print("Started");
   /* Setup PID */
-  pidTilt.SetMode(AUTOMATIC);
-  pidTilt.SetSampleTime(10);
-  pidTilt.SetOutputLimits(-255, 255); 
+    pidTilt.SetMode(AUTOMATIC);
+    pidTilt.SetSampleTime(10);
+    pidTilt.SetOutputLimits(-255, 255);
 
-  pidYaw.SetMode(AUTOMATIC);
-  pidYaw.SetSampleTime(10);
-  pidYaw.SetOutputLimits(-255, 255); 
+    pidYaw.SetMode(AUTOMATIC);
+    pidYaw.SetSampleTime(10);
+    pidYaw.SetOutputLimits(-255, 255);
 
   /* Setup the AP */
   //WiFi.mode(WIFI_AP);
   //WiFi.softAP(SSID, PASSWORD);
-  //server.begin();  
+  //server.begin();
 
- 
+  //drop_PIDC(&pidTilt);
+  //drop_PIDC(&pidTilt);
+
+  lastTime = millis() - 10;
+  lastTimey = millis() - 10;
+
 }
-
-
 
 void loop() {
 
@@ -166,53 +182,24 @@ void loop() {
   input = ypr[1];
   inputy = ypr[0];
 
-  if(setpointy > 4.0){
+  if (setpointy > 4.0) {
     setpointy = ypr[0];
   }
 
-/*  if (SerialBT.available() > 0)
-  {
-    SerialBT.readBytes(remote_buff, 4);
 
-    tiltNumber = remote_16[0];
-    yawNumber = remote_16[1];
+  //
+  /*  if (SerialBT.available() > 0)
+    {
+      SerialBT.readBytes(remote_buff, 4);
 
-    float tiltDecode = ((float)tiltNumber) /(65535.0f)*(2.0f) - 1.05f;
-    float yawDecode = ((float)yawNumber) /(65535.0f)*(2.0f) - 1.0f;
+      tiltNumber = remote_16[0];
+      yawNumber = remote_16[1];
 
-    tiltDecode *= 0.3;
-    yawDecode *= 0.2;
-
-    Serial.print("Received. Tilt:");
-    Serial.print(tiltDecode);
-    Serial.print(" Yaw:");
-    Serial.println(yawDecode);
-
-    setpoint = tiltDecode;
-    setpointy +=  yawDecode;   
-
-    //setpoint = (0.4*((float)remote_16[0]))/((float)(2 << 16 - 1)) - 0.2;
-    //setpointy = 2*3.1415 * ((float)remote_16[1])/((float)(2 << 16)) - 3.1415;
-    //Serial.print(setpoint);
-   // Serial.print(" ");
-    //Serial.println(setpointy);
-  }*/
-
-/*
- client = server.available();
-  if (client){  
-    if (client.available()) {
-      uint8_t buffer[PACKET_SIZE];
-      len = client.read(buffer, PACKET_SIZE);
-      const uint16_t* buff16 = (const uint16_t*)buffer;
-      tiltNumber = buff16[0];
-      yawNumber = buff16[1];
-
-      float tiltDecode = ((float)tiltNumber) /(65535.0f)*(2.0f) - 1.0f;
+      float tiltDecode = ((float)tiltNumber) /(65535.0f)*(2.0f) - 1.05f;
       float yawDecode = ((float)yawNumber) /(65535.0f)*(2.0f) - 1.0f;
 
-      tiltDecode *= 0.2;
-      yawDecode *= 0.01;
+      tiltDecode *= 0.3;
+      yawDecode *= 0.2;
 
       Serial.print("Received. Tilt:");
       Serial.print(tiltDecode);
@@ -221,150 +208,200 @@ void loop() {
 
       setpoint = tiltDecode;
       setpointy +=  yawDecode;
-    }
-  }
-  */
-  
-  if(Serial.available() > 0)
-  {   
-    Serial.setTimeout(90);
-    serBuff = Serial.readString(); 
 
-    if(serBuff.substring(0, 4) == "KILL"){
-            Serial.println("Killing Motors");
-            // TODO: Kill Motors
-    }else if (serBuff.substring(0, 7) == "SETTILT"){
+      //setpoint = (0.4*((float)remote_16[0]))/((float)(2 << 16 - 1)) - 0.2;
+      //setpointy = 2*3.1415 * ((float)remote_16[1])/((float)(2 << 16)) - 3.1415;
+      //Serial.print(setpoint);
+     // Serial.print(" ");
+      //Serial.println(setpointy);
+    }*/
+
+  /*
+    client = server.available();
+    if (client){
+      if (client.available()) {
+        uint8_t buffer[PACKET_SIZE];
+        len = client.read(buffer, PACKET_SIZE);
+        const uint16_t* buff16 = (const uint16_t*)buffer;
+        tiltNumber = buff16[0];
+        yawNumber = buff16[1];
+
+        float tiltDecode = ((float)tiltNumber) /(65535.0f)*(2.0f) - 1.0f;
+        float yawDecode = ((float)yawNumber) /(65535.0f)*(2.0f) - 1.0f;
+
+        tiltDecode *= 0.2;
+        yawDecode *= 0.01;
+
+        Serial.print("Received. Tilt:");
+        Serial.print(tiltDecode);
+        Serial.print(" Yaw:");
+        Serial.println(yawDecode);
+
+        setpoint = tiltDecode;
+        setpointy +=  yawDecode;
+      }
+    }
+  */
+
+  if (Serial.available() > 0)
+  {
+    Serial.setTimeout(90);
+    serBuff = Serial.readString();
+
+    if (serBuff.substring(0, 4) == "KILL") {
+      Serial.println("Killing Motors");
+      // TODO: Kill Motors
+    } else if (serBuff.substring(0, 7) == "SETTILT") {
       double tiltAngle;
       char __serBuff[sizeof(serBuff)];
-      serBuff.toCharArray(__serBuff, sizeof(__serBuff));    
+      serBuff.toCharArray(__serBuff, sizeof(__serBuff));
       int result = sscanf(__serBuff, "SETTILT %lf", &tiltAngle);
       Serial.print("Setting Tilt: ");
-      Serial.println(tiltAngle/100);      
-      setpoint = tiltAngle/100.0;
-    } else if(serBuff.substring(0, 6) == "SETYAW"){
+      Serial.println(tiltAngle / 100);
+      setpoint = tiltAngle / 100.0;
+    } else if (serBuff.substring(0, 6) == "SETYAW") {
       double yawAngle;
       char __serBuff[sizeof(serBuff)];
-      serBuff.toCharArray(__serBuff, sizeof(__serBuff));    
+      serBuff.toCharArray(__serBuff, sizeof(__serBuff));
       int result = sscanf(__serBuff, "SETYAW %lf", &yawAngle);
       Serial.print("Setting yaw: ");
-      Serial.println(yawAngle/100);  
-      setpointy = yawAngle/100.0;
-      
-    }else if(serBuff.substring(0, 6) == "SETPID") {
+      Serial.println(yawAngle / 100);
+      setpointy = yawAngle / 100.0;
+
+    } else if (serBuff.substring(0, 6) == "SETPID") {
       double kpt, kit, kdt;
       char __serBuff[sizeof(serBuff)];
-      serBuff.toCharArray(__serBuff, sizeof(__serBuff));    
+      serBuff.toCharArray(__serBuff, sizeof(__serBuff));
       int result = sscanf(__serBuff, "SETPID %lf %lf %lf", &kpt, &kit, &kdt);
-  
-      pidTilt.SetTunings((double)kpt, (double)kit, (double)kdt);
-  
+
+      //      pidTilt.SetTunings((double)kpt, (double)kit, (double)kdt);
+
       Serial.print("PID Gains Changed. P:");
-      Serial.print(pidTilt.GetKp());
+      //      Serial.print(pidTilt.GetKp());
       Serial.print(" I:");
-      Serial.print(pidTilt.GetKi());
+      //      Serial.print(pidTilt.GetKi());
       Serial.print(" D:");
-      Serial.println(pidTilt.GetKd());
+      //      Serial.println(pidTilt.GetKd());
     }
   }
+
+
+  //Serial.print(" input: ");
+ // Serial.print(input);
+  //Serial.print(" inputy: ");
+  //Serial.print(inputy);
+  
+
+  //pidTilt.Compute();  //Compute Tilt PID
+  //pidYaw.Compute();   //Compute Yaw PID
+
+
  
-
   
+  compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, millis(), &lastTime, 10, &lastInput, &outputSum);
+  compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, millis(), &lastTimey, 10, &lastInputy, &outputSumy);
 
-  Serial.print( wraptopi(setpointy - ypr[0]));
-  Serial.print(" ");
-  Serial.println(wraptopi(setpoint - ypr[1]));
-  
-  pidTilt.Compute();  //Compute Tilt PID
-  pidYaw.Compute();   //Compute Yaw PID
+//  output = compute_PIDC(&pidTilt, millis(), input);
+  //Serial.print(" output: ");
+ // Serial.print(output);
+   // Serial.print(" output_old ");
+   // Serial.print(output_old);
+//  outputy = compute_PIDC(&pidYaw, millis(), input);
+  //Serial.print(" outputy: ");
+ // Serial.print(outputy);
+   // Serial.print(" outputy_old ");
+   // Serial.print(outputy_old);
+   // Serial.print("\n");
 
   out0 = output - outputy;
   out1 = output + outputy;
 
-  if(out0 > 0.0){
+  if (out0 > 0.0) {
     digitalWrite(DR0, false);
   } else {
     digitalWrite(DR0, true);
   }
 
-  if(out1 > 0.0){
+  if (out1 > 0.0) {
     digitalWrite(DR1, true);
   } else {
     digitalWrite(DR1, false);
   }
 
-  double duty_mag0 = abs(1000.0/50.0*min((double)50, abs(out0)));
-  Serial.print(duty_mag0);
-  double duty_mag1 = abs(1000.0/50.0*min((double)50, abs(out1)));
- // dutyCycle0 = (uint8_t)duty_mag0;
- // dutyCycle1 = (uint8_t)duty_mag1;
+  double duty_mag0 = abs(1000.0 / 50.0 * min((double)50, abs(out0)));
+  double duty_mag1 = abs(1000.0 / 50.0 * min((double)50, abs(out1)));
+  // dutyCycle0 = (uint8_t)duty_mag0;
+  // dutyCycle1 = (uint8_t)duty_mag1;
 
-  if(fabs(input) < 0.6){
-    pwm.analogWrite(2, duty_mag0);
-    pwm.analogWrite(3, duty_mag1);
-    Serial.print(duty_mag0);
-    Serial.print(duty_mag1);
-    
+  if (fabs(input) < 0.6) {
+    pwm.analogWrite(PWM0, duty_mag0);
+    pwm.analogWrite(PWM1, duty_mag1);
+//    Serial.print(" duty_mag0: ");
+//    Serial.print(duty_mag0);
+//    Serial.print(" duty_mag1: ");
+//    Serial.print(duty_mag1);
+
   } else {
-    pwm.analogWrite(2, 0);
-    pwm.analogWrite(3, 0);
+    pwm.analogWrite(PWM0, 0);
+    pwm.analogWrite(PWM1, 0);
   }
 
-  
-/* 
-  Serial.print(ypr[0]);
-  Serial.print(" ");
-  Serial.print(ypr[1]);
-  Serial.print(" ");
-  Serial.print(outputy);
-  Serial.print(" ");
-  Serial.println(output);
+
+  /*
+    Serial.print(ypr[0]);
+    Serial.print(" ");
+    Serial.print(ypr[1]);
+    Serial.print(" ");
+    Serial.print(outputy);
+    Serial.print(" ");
+    Serial.println(output);
   */
 
   /*if(output > 0.0){
     digitalWrite(DR1, true);
     digitalWrite(DR0, false);
-    
-  }
-  else {
+
+    }
+    else {
     digitalWrite(DR1, false);
     digitalWrite(DR0, true);
-  }*/
+    }*/
 
 
-  
+
   //double duty_mag = abs(255.0/50.0*min(50, abs(output)));
   //dutyCycle = (uint8_t)duty_mag;
 
   //Serial.print(" ");
   //Serial.println(dutyCycle);
-  
+
 
   /*if(prevDuty != dutyCycle)
-  {
-    
+    {
+
     if(fabs(input) < 0.6){
-      ledcWrite(pwmChannel1, dutyCycle); 
+      ledcWrite(pwmChannel1, dutyCycle);
       ledcWrite(pwmChannel0, dutyCycle);
     } else {
-      ledcWrite(pwmChannel0, 0); 
+      ledcWrite(pwmChannel0, 0);
       ledcWrite(pwmChannel1, 0);
     }
-  }
+    }
 
 
-  if (fabs(input) > 1.0) {
-    ledcWrite(pwmChannel0, 0); 
+    if (fabs(input) > 1.0) {
+    ledcWrite(pwmChannel0, 0);
     ledcWrite(pwmChannel1, 0);
-  }*/
+    }*/
 
-//  prevDuty = dutyCycle;
+  //  prevDuty = dutyCycle;
 }
 
-void initialize_pwm(){
+void initialize_pwm() {
   // Backwards: DR1 false, DR2 true
   // Forwards: DR1 true, DR2 false
   bool dir = true;
-  
+
   pinMode(PWM1, OUTPUT);
   pinMode(DR1, OUTPUT);
   pinMode(NEN1, OUTPUT);
@@ -377,20 +414,23 @@ void initialize_pwm(){
   digitalWrite(NEN0, 1);
   digitalWrite(DR1, dir);
   digitalWrite(DR0, !dir);
-  
+
 
   pwm.setClockDivider(1, false); //
-  pwm.timer(1, 1, 800, false); //240kHz/8, 30Khz
-
+  pwm.timer(1, 1, 800, false); //timer x, prescaler, steps resolution
   
-/* 
-  ledcSetup(pwmChannel0, freq, resolution);  
-  ledcSetup(pwmChannel1, freq, resolution);  
-  ledcAttachPin(PWM1, pwmChannel1);
-  ledcAttachPin(PWM0, pwmChannel0);*/
-  }
+  pwm.setClockDivider(0, false); //
+  pwm.timer(0, 1, 800, false); //timer 
 
-void initialize_ypr(){
+
+  /*
+    ledcSetup(pwmChannel0, freq, resolution);
+    ledcSetup(pwmChannel1, freq, resolution);
+    ledcAttachPin(PWM1, pwmChannel1);
+    ledcAttachPin(PWM0, pwmChannel0);*/
+}
+
+void initialize_ypr() {
   /* Initialize the MPU */
   mpu.initialize();
   /* Verify the MPU */
@@ -432,8 +472,8 @@ void initialize_ypr(){
   }
 }
 
-void fetch_ypr(){
-    /* if programming failed, don't try to do anything */
+void fetch_ypr() {
+  /* if programming failed, don't try to do anything */
   if (!dmpReady) return;
   while (!mpuInterrupt && fifoCount < packetSize) {
   }
