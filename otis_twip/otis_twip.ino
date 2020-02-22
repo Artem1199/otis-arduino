@@ -5,14 +5,14 @@
 
 
 #include <Wire.h>
-//#include "BluetoothSerial.h"
-#include "PID_v1.h"
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "SAMD21turboPWM.h"
 #include <pid_control.h>
 
 
+//#define DEBUG 
+#include "PID_v1.h"
 //#include <WiFi.h>
 
 /* MACROS */
@@ -24,8 +24,8 @@
 #define PWM1 4
 #define NEN1 3
 
-#define PWM0 2
 #define DR0 1
+#define PWM0 2
 #define NEN0 0
 
 
@@ -82,9 +82,9 @@ double errSum, lastTime, lastInput= 0, outputSum = 0;
 //double Kit = 100;
 //double Kdt = 7;
 
-double Kpt = 120;
-double Kit = 150;
-double Kdt = 5;
+double Kpt = 60;
+double Kit = 91;
+double Kdt = 0;
 
 
 
@@ -93,13 +93,13 @@ double setpointy = 100.0;
 double inputy, outputy;
 double inputy_old, outputy_old;
 
-double Kpy = 15;
-double Kiy = 0;
-double Kdy = 2;
+double Kpy = 50;
+double Kiy = 40;
+double Kdy = 0;
 
 double errSumy, lastTimey, lastInputy = 0, outputSumy = 0;
-//PID pidTilt(&input_old, &output_old, &setpoint, Kpt, Kit, Kdt, DIRECT);
-//PID pidYaw(&inputy_old, &outputy_old, &setpointy, Kpy, Kiy, Kdy, DIRECT);
+PID pidTilt(&input, &output_old, &setpoint, Kpt, Kit, Kdt, DIRECT);
+PID pidYaw(&inputy, &outputy_old, &setpointy, Kpy, Kiy, Kdy, DIRECT);
 
 float curr =  0x7FFFFFFF;
 float prev =  0x7FFFFFFF;
@@ -159,13 +159,13 @@ void setup() {
   initialize_pwm();
   Serial.print("Started");
   /* Setup PID */
-    //pidTilt.SetMode(AUTOMATIC);
-    //pidTilt.SetSampleTime(10);
-    //pidTilt.SetOutputLimits(-255, 255);
+    pidTilt.SetMode(AUTOMATIC);
+    pidTilt.SetSampleTime(10);
+    pidTilt.SetOutputLimits(-1000, 1000);
 
-    //pidYaw.SetMode(AUTOMATIC);
-    //pidYaw.SetSampleTime(10);
-    //pidYaw.SetOutputLimits(-255, 255);
+    pidYaw.SetMode(AUTOMATIC);
+    pidYaw.SetSampleTime(10);
+    pidYaw.SetOutputLimits(-1000, 1000);
 
   /* Setup the AP */
   //WiFi.mode(WIFI_AP);
@@ -175,8 +175,14 @@ void setup() {
   //drop_PIDC(&pidTilt);
   //drop_PIDC(&pidTilt);
 
+  pinMode(LED_BUILTIN, OUTPUT);
+
   lastTime = millis() - 10;
   lastTimey = millis() - 10;
+  fetch_ypr();
+  input = ypr[1];
+  inputy = ypr[0];
+  
 
 }
 
@@ -185,8 +191,13 @@ void loop() {
   //Serial.print(" BP A ");
 
   fetch_ypr();
+  if (input != ypr[1]){
+    digitalWrite(LED_BUILTIN, HIGH);
+  }
   input = ypr[1];
   inputy = ypr[0];
+
+  
 
   if (setpointy > 4.0) {
     setpointy = ypr[0];
@@ -296,37 +307,36 @@ void loop() {
  // Serial.print(input);
   //Serial.print(" inputy: ");
   //Serial.print(inputy);
+#ifdef DEBUG
+  Serial.print(" lI: ");
+  Serial.print(lastInput);
+#endif
+
+  unsigned long now = millis();
+
   
   //Serial.print(" BP C ");
-  //pidTilt.Compute();  //Compute Tilt PID
-  //pidYaw.Compute();   //Compute Yaw PID
+  //pidTilt.Compute(now);  //Compute Tilt PID
+  //pidYaw.Compute(now);   //Compute Yaw PID
 
+  compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, now, &lastTime, 10, &lastInput, &outputSum);
+  compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
 
-   //Serial.print(" BP D ");
-  
-  compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, millis(), &lastTime, 10, &lastInput, &outputSum);
-  compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, millis(), &lastTimey, 10, &lastInputy, &outputSumy);
+#ifdef DEBUG
+  Serial.print(" input: ");
+  Serial.print(input);
+  Serial.print(" lT: ");
+  Serial.print(lastTime);
+  Serial.print(" oS: ");
+  Serial.print(outputSum);
+  Serial.print(" O: ");
+  Serial.println(output);
+#endif
 
-//  output = compute_PIDC(&pidTilt, millis(), input);
-  //Serial.print(" output: ");
- // Serial.print(output);
-   // Serial.print(" output_old ");
-   // Serial.print(output_old);
-//  outputy = compute_PIDC(&pidYaw, millis(), input);
-  //Serial.print(" outputy: ");
-  //Serial.print(outputy);
-   // Serial.print(" outputy_old: ");
-    //Serial.print(outputy_old);
-  //Serial.print(" BP E ");
-  Serial.print("input: ");
-  Serial.print(ypr[1]);
 
   out0 = output - outputy;
   out1 = output + outputy;
-  Serial.print(" out0: ");
-  Serial.print(out0);
-  Serial.print(" out1: ");
-  Serial.println(out1);
+
 
   if (out0 > 0.0) {
     digitalWrite(DR0, false);
@@ -358,27 +368,6 @@ void loop() {
     pwm.analogWrite(PWM1, 0);
   }
 
-  // Serial.println(" BP G ");
-  /*
-    Serial.print(ypr[0]);
-    Serial.print(" ");
-    Serial.print(ypr[1]);
-    Serial.print(" ");
-    Serial.print(outputy);
-    Serial.print(" ");
-    Serial.println(output);
-  */
-
-  /*if(output > 0.0){
-    digitalWrite(DR1, true);
-    digitalWrite(DR0, false);
-
-    }
-    else {
-    digitalWrite(DR1, false);
-    digitalWrite(DR0, true);
-    }*/
-
 
 
   //double duty_mag = abs(255.0/50.0*min(50, abs(output)));
@@ -407,6 +396,7 @@ void loop() {
     }*/
 
   //  prevDuty = dutyCycle;
+      digitalWrite(LED_BUILTIN, LOW);
 }
 
 void initialize_pwm() {

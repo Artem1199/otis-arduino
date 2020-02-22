@@ -121,13 +121,13 @@ pub extern "C" fn compute_pid(Input: f64, Output: &mut f64, Setpoint: f64, Kp: f
         let error = wraptopi_r(Setpoint - Input);
         let dInput = Input - *lastInput;
 
-        //*outputSum += Ki * error * 0.01;
+        *outputSum += Ki * error * SampleTime/1000.0;
 
         if *outputSum > 1000.0 
             {*outputSum = 1000.0;}
         else if *outputSum < -1000.0
             {*outputSum = -1000.0;}
-
+        //*Output = Kp * error + *outputSum - Kd * dInput * 1000.0/SampleTime;
         *Output = Kp * error + Ki * error * SampleTime/1000.0 - Kd * dInput * 1000.0/SampleTime;
 
         if *Output > 1000.0 {*Output = 1000.0;}

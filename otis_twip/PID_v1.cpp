@@ -55,10 +55,10 @@ PID::PID(double* Input, double* Output, double* Setpoint,
  *   pid Output needs to be computed.  returns true when the output is computed,
  *   false when nothing has been done.
  **********************************************************************************/
-bool PID::Compute()
+bool PID::Compute(unsigned long now)
 {
    if(!inAuto) return false;
-   unsigned long now = millis();
+   //unsigned long now = millis();
    unsigned long timeChange = (now - lastTime);
    if(timeChange>=SampleTime)
    {
@@ -91,6 +91,8 @@ bool PID::Compute()
       lastInput = input;
       lastTime = now;
 	    return true;
+
+
    }
    else return false;
 }
