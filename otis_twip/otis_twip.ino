@@ -9,12 +9,32 @@
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "SAMD21turboPWM.h"
 #include <pid_control.h>
+#include "PID_v1.h"
 
+
+#define HOST "192.168.50.158"
+#define URI "/data.php"
+#define PORT 80
+#define APIKEYVALUE "1"
+const char* httpHeader =         "POST " URI " HTTP/1.1\r\n"
+                                 "Host: " HOST "\r\n"
+                                 "Content-Type: application/x-www-form-urlencoded\r\n"
+                                 "Connection: keep-alive\r\n"
+                                 "Content-Length: ";
+                                 
+String httpHeaderS = "POST /data.php HTTP/1.1\r\nHost: 192.168.50.158 \r\nContent-Type: application/x-www-form-urlencoded\r\nConnection: keep-alive\r\nContent-Length: ";
+
+
+const char* field_names[] = {"t", "y", "o","g"};
+const size_t nb_fields = sizeof(field_names) / sizeof (field_names[0]);
+
+
+#include <WiFiNINA.h>                                 
+#include <SPI.h>
+#include <WiFiUdp.h>
+#include <utility/wifi_drv.h>
 
 //#define DEBUG 
-#include "PID_v1.h"
-//#include <WiFi.h>
-
 /* MACROS */
 #define SERIAL_BAUD 115200
 #define I2C_FAST_MODE 400000
@@ -28,8 +48,9 @@
 #define PWM0 2
 #define NEN0 0
 
-
-
+//WiFiClient client;
+WiFiServer server(80);
+bool data_sent = false;
 /* System Tuning */
 uint16_t gyro_bias[] = {10, 7, 14};
 uint16_t accel_z_bias = 900;
@@ -59,6 +80,8 @@ float ypr[3];
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 void dmpDataReady() {
   mpuInterrupt = true;
+ // Serial.println("IT");
+
 }
 
 /* Setting PWM properties */
@@ -82,11 +105,9 @@ double errSum, lastTime, lastInput= 0, outputSum = 0;
 //double Kit = 100;
 //double Kdt = 7;
 
-double Kpt = 60;
+double Kpt = 80;
 double Kit = 91;
 double Kdt = 0;
-
-
 
 
 double setpointy = 100.0;
@@ -98,8 +119,8 @@ double Kiy = 40;
 double Kdy = 0;
 
 double errSumy, lastTimey, lastInputy = 0, outputSumy = 0;
-PID pidTilt(&input, &output_old, &setpoint, Kpt, Kit, Kdt, DIRECT);
-PID pidYaw(&inputy, &outputy_old, &setpointy, Kpy, Kiy, Kdy, DIRECT);
+//PID pidTilt(&input, &output_old, &setpoint, Kpt, Kit, Kdt, DIRECT);
+//PID pidYaw(&inputy, &outputy_old, &setpointy, Kpy, Kiy, Kdy, DIRECT);
 
 float curr =  0x7FFFFFFF;
 float prev =  0x7FFFFFFF;
@@ -117,21 +138,28 @@ String serBuff = "";
 
 /* Websockets Control */
 
-#define SSID "OTIS-bot"
-#define PASSWORD "japery2019"
+//#define SSID "OTIS-bot"
+//#define PASSWORD "japery2019"
 #define SERVER_PORT 4141
 
 #define PACKET_SIZE 4
 
 #define IS_SERVER
 
+
+char ssid[] = "VladimirPutin_2G";
+char pass[] = "741593@Ro";
+int status = WL_IDLE_STATUS; 
+
+WiFiClient client;
 enum Protocol {
   TILT_SET,
   YAW_SET
 };
 
 /*
-  WiFiServer server(SERVER_PORT);
+  
+  Server server(SERVER_PORT);
   WiFiClient client;
   size_t len;
 */
@@ -141,69 +169,134 @@ uint16_t tiltNumber, yawNumber;
 
 TurboPWM pwm;
 
+unsigned long postDelay = millis();
 
+String apiKeyValue = "1";
+
+/*_____________________________________________________ SETUP _______________________________________________________________*/
 
 void setup() {
+  WiFiDrv::pinMode(25, OUTPUT); //GREEN
+  WiFiDrv::pinMode(26, OUTPUT); //RED
+  WiFiDrv::pinMode(27, OUTPUT); //BLUE
+  WiFiDrv::digitalWrite(26, HIGH); // for full brightness
+
+
+
+  digitalWrite(12, LOW);
+  digitalWrite(13, LOW);
 
   /* Create Bluetooth Serial */
   //SerialBT.begin("OTIS-BOT");
   /* Set the serial baud rate*/
   Serial.begin(SERIAL_BAUD);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
+  
+  pinMode(LED_BUILTIN, OUTPUT);
   delay(1000);
   /* Setup the I2C bus */
-  Wire.setClock(I2C_FAST_MODE);
-  Wire.begin();
-  /* Setup the IMU and relevant buffers */
-  initialize_ypr();
+
+ Wire.begin();
+ Wire.setClock(400000);
+
   /* Setup the motors */
   initialize_pwm();
-  Serial.print("Started");
-  /* Setup PID */
-    pidTilt.SetMode(AUTOMATIC);
-    pidTilt.SetSampleTime(10);
-    pidTilt.SetOutputLimits(-1000, 1000);
+  /* Setup wifi */
+  initialize_wifi();
+  server.begin();
+  WiFiDrv::digitalWrite(26, LOW); // for full brightness
+  WiFiDrv::digitalWrite(27, HIGH); // for full brightness
+  /* Setup the IMU and relevant buffers */
+  initialize_ypr();
+  
 
-    pidYaw.SetMode(AUTOMATIC);
-    pidYaw.SetSampleTime(10);
-    pidYaw.SetOutputLimits(-1000, 1000);
+client.stop();
 
-  /* Setup the AP */
-  //WiFi.mode(WIFI_AP);
-  //WiFi.softAP(SSID, PASSWORD);
-  //server.begin();
+/*if (client.connect(HOST, PORT)) {
+      client.print(httpHeader);
+      client.println(postData.length());
+      client.println();
+      client.print(postData);}
 
-  //drop_PIDC(&pidTilt);
-  //drop_PIDC(&pidTilt);
+        while(client.available()==0)//wait until data reception
+    {
+     ; // you can add a counter and break if you exceed a value
+    }
+    int codeResponse;
+       codeResponse = client.read();
+      Serial.write(codeResponse); */
 
-  pinMode(LED_BUILTIN, OUTPUT);
+     // client.connect(HOST, PORT);
 
+
+  initialize_ypr();
+
+ /* init PID values */
   lastTime = millis() - 10;
   lastTimey = millis() - 10;
   fetch_ypr();
   input = ypr[1];
   inputy = ypr[0];
-  
+
+  while(!client){
+     client = server.available();
+     if (client.connected()) break;
+     delay(10);
+     }
+
+  WiFiDrv::digitalWrite(27, LOW); // for full brightness
+  WiFiDrv::digitalWrite(25, HIGH); // for full brightness
 
 }
 
+unsigned long hold = millis();
+int count = 0;
+int countmax = 0;
+
+unsigned long evalDelay = millis();
+
+unsigned long timediff = 0;
+unsigned long sendcounter = 0;
+unsigned long notcounter = 0;
+bool client_avi = false;
+
+/*_____________________________________________________ LOOP _______________________________________________________________*/
+
+int send_c = 0;
+
+const size_t httpBodySize = 128;
+char httpBody[httpBodySize];
+
+unsigned long loopdiff;
+
 void loop() {
 
-  //Serial.print(" BP A ");
-
+  
+  loopdiff = micros();
   fetch_ypr();
-  if (input != ypr[1]){
-    digitalWrite(LED_BUILTIN, HIGH);
-  }
+  
+    if (input != ypr[1]){
+      WiFiDrv::digitalWrite(25, HIGH);
+    }
   input = ypr[1];
   inputy = ypr[0];
 
+
+ static int value = 0;
+  int values[nb_fields] = {value++, 2147483647, -2147483648};
+  
+  values[0] = ypr[1]*100;
+  values[1] = ypr[0]*100;
+  values[2] = output;
+ values[3] = outputy;
   
 
   if (setpointy > 4.0) {
     setpointy = ypr[0];
   }
 
- // Serial.print(" BP B ");
   //
   /*  if (SerialBT.available() > 0)
     {
@@ -313,14 +406,10 @@ void loop() {
 #endif
 
   unsigned long now = millis();
-
   
-  //Serial.print(" BP C ");
-  //pidTilt.Compute(now);  //Compute Tilt PID
-  //pidYaw.Compute(now);   //Compute Yaw PID
+ // compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, now, &lastTime, 10, &lastInput, &outputSum);
+ // compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
 
-  compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, now, &lastTime, 10, &lastInput, &outputSum);
-  compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
 
 #ifdef DEBUG
   Serial.print(" input: ");
@@ -332,7 +421,6 @@ void loop() {
   Serial.print(" O: ");
   Serial.println(output);
 #endif
-
 
   out0 = output - outputy;
   out1 = output + outputy;
@@ -367,37 +455,26 @@ void loop() {
     pwm.analogWrite(PWM0, 0);
     pwm.analogWrite(PWM1, 0);
   }
+      
+  size_t bodyLen = generateBodyStr(httpBody, values);
+
+  if (millis() - postDelay > 10){
+           client.println(httpBody);
+           postDelay = millis();
+        //   value_ptr = 0;          
+  }
+
+ 
 
 
 
-  //double duty_mag = abs(255.0/50.0*min(50, abs(output)));
-  //dutyCycle = (uint8_t)duty_mag;
 
-  //Serial.print(" ");
-  //Serial.println(dutyCycle);
+    WiFiDrv::digitalWrite(25, LOW);
 
-
-  /*if(prevDuty != dutyCycle)
-    {
-
-    if(fabs(input) < 0.6){
-      ledcWrite(pwmChannel1, dutyCycle);
-      ledcWrite(pwmChannel0, dutyCycle);
-    } else {
-      ledcWrite(pwmChannel0, 0);
-      ledcWrite(pwmChannel1, 0);
-    }
-    }
-
-
-    if (fabs(input) > 1.0) {
-    ledcWrite(pwmChannel0, 0);
-    ledcWrite(pwmChannel1, 0);
-    }*/
-
-  //  prevDuty = dutyCycle;
-      digitalWrite(LED_BUILTIN, LOW);
+   Serial.println(micros() - loopdiff);
 }
+
+/*_____________________________________________________ PWM _______________________________________________________________*/
 
 void initialize_pwm() {
   // Backwards: DR1 false, DR2 true
@@ -423,14 +500,9 @@ void initialize_pwm() {
   
   pwm.setClockDivider(0, false); //
   pwm.timer(0, 1, 800, false); //timer 
-
-
-  /*
-    ledcSetup(pwmChannel0, freq, resolution);
-    ledcSetup(pwmChannel1, freq, resolution);
-    ledcAttachPin(PWM1, pwmChannel1);
-    ledcAttachPin(PWM0, pwmChannel0);*/
 }
+
+/*_____________________________________________________ IMU _______________________________________________________________*/
 
 void initialize_ypr() {
   /* Initialize the MPU */
@@ -440,6 +512,9 @@ void initialize_ypr() {
   /* Initialize the DMP */
   Serial.println(F("Initializing DMP..."));
   devStatus = mpu.dmpInitialize();
+  mpu.setRate(9); //Set sampling rate to 1000/(1+9)
+  //uint8_t a = 1;
+  //mpu.dmpSetFIFORate(a);
   /* Set the device biases appropiately */
   mpu.setXGyroOffset(gyro_bias[0]);
   mpu.setYGyroOffset(gyro_bias[1]);
@@ -474,7 +549,16 @@ void initialize_ypr() {
   }
 }
 
-void fetch_ypr() {
+/*_____________________________________________________ YPR _______________________________________________________________*/
+void fetch_ypr(){
+
+ /* if (!dmpReady) return;
+  if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)){
+    mpu.dmpGetQuaternion(&q, fifoBuffer);
+    mpu.dmpGetGravity(&gravity, &q);
+    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+  }*/
+
   /* if programming failed, don't try to do anything */
   if (!dmpReady) return;
   while (!mpuInterrupt && fifoCount < packetSize) {
@@ -489,7 +573,7 @@ void fetch_ypr() {
   {
     /* reset so we can continue cleanly */
     mpu.resetFIFO();
-    Serial.println(F("********************************* FIFO overflow!********************************* "));
+    Serial.println(F("FIFO overflow!"));
   }
   else if (mpuIntStatus & 0x02)
   {
@@ -508,4 +592,86 @@ void fetch_ypr() {
     //angular_rate = -((double)gyro[1]/131.0); // converted to radian
     //Serial.println(ypr[0]);
   }
+  
+}
+
+/*_____________________________________________________ WIFI _______________________________________________________________*/
+
+void initialize_wifi(){
+
+  // check for the WiFi module:
+  if (WiFi.status() == WL_NO_MODULE) {
+    Serial.println("Communication with WiFi module failed!");
+    // don't continue
+    while (true);
+  }
+
+    String fv = WiFi.firmwareVersion();
+  if (fv < WIFI_FIRMWARE_LATEST_VERSION) {
+    Serial.println("Please upgrade the firmware");
+  }
+
+  // attempt to connect to Wifi network:
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to WPA SSID: ");
+    Serial.println(ssid);
+    // Connect to WPA/WPA2 network:
+    status = WiFi.begin(ssid, pass);
+
+    // wait 10 seconds for connection: 
+    delay(3000);
+  }
+  printWiFiStatus();
+
+  // you're connected now, so print out the data:
+  Serial.println("You're connected to the network");
+  
+  return;
+}
+
+
+/*_____________________________________________________ HTTP _______________________________________________________________*/
+
+void post_data(WiFiClient client, size_t bodyLen, char* httpBody) {
+  client.print(httpHeader);
+  client.println(bodyLen);
+  client.println();
+  client.print(httpBody);
+
+  data_sent = true;
+
+  return;
+}
+
+
+size_t generateBodyStr(char* httpBody, int values[nb_fields]) {
+  if (nb_fields == 0)
+    return 0;
+  // print the first field name and value as key=value pair
+  size_t bodyLen = sprintf(httpBody, "%s%d", field_names[0], values[0]);  
+  for (size_t i = 1; i < nb_fields; i++) {  // append the remaining field names and values to the string
+    // each pair is separated by an ampersand (&)
+    bodyLen += sprintf(&httpBody[bodyLen], "%s%d", field_names[i], values[i]);
+  }
+  return bodyLen;
+}
+
+
+/*_____________________________________________________ WiFi _______________________________________________________________*/
+
+void printWiFiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your board's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
 }
