@@ -25,7 +25,7 @@ const char* httpHeader =         "POST " URI " HTTP/1.1\r\n"
 String httpHeaderS = "POST /data.php HTTP/1.1\r\nHost: 192.168.50.158 \r\nContent-Type: application/x-www-form-urlencoded\r\nConnection: keep-alive\r\nContent-Length: ";
 
 
-const char* field_names[] = {"t", "y", "o","g"};
+const char* field_names[] = {"", "", "",""};
 const size_t nb_fields = sizeof(field_names) / sizeof (field_names[0]);
 
 
@@ -34,7 +34,7 @@ const size_t nb_fields = sizeof(field_names) / sizeof (field_names[0]);
 #include <WiFiUdp.h>
 #include <utility/wifi_drv.h>
 
-//#define DEBUG 
+#define DEBUG 
 /* MACROS */
 #define SERIAL_BAUD 115200
 #define I2C_FAST_MODE 400000
@@ -190,12 +190,12 @@ void setup() {
   //SerialBT.begin("OTIS-BOT");
   /* Set the serial baud rate*/
   Serial.begin(SERIAL_BAUD);
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
+  //while (!Serial) {
+  //  ; // wait for serial port to connect. Needed for native USB port only
+  //}
+  delay(1000);
   
   pinMode(LED_BUILTIN, OUTPUT);
-  delay(1000);
   /* Setup the I2C bus */
 
  Wire.begin();
@@ -214,22 +214,6 @@ void setup() {
 
 client.stop();
 
-/*if (client.connect(HOST, PORT)) {
-      client.print(httpHeader);
-      client.println(postData.length());
-      client.println();
-      client.print(postData);}
-
-        while(client.available()==0)//wait until data reception
-    {
-     ; // you can add a counter and break if you exceed a value
-    }
-    int codeResponse;
-       codeResponse = client.read();
-      Serial.write(codeResponse); */
-
-     // client.connect(HOST, PORT);
-
 
   initialize_ypr();
 
@@ -242,7 +226,13 @@ client.stop();
 
   while(!client){
      client = server.available();
-     if (client.connected()) break;
+     if (client.connected()) {
+      while (client.available()){
+        client.read(); 
+      }
+      client.write("Ack\n"); 
+           //client.println("hello"); 
+     break;}
      delay(10);
      }
 
@@ -283,75 +273,25 @@ void loop() {
   input = ypr[1];
   inputy = ypr[0];
 
+  
+
+  
+  
+  
+  //Serial.print("Eqv Values:");
+  //Serial.print(send_p);
+ // Serial.print(" ");
+ // Serial.println(ypr[1]);
+
 
  static int value = 0;
   int values[nb_fields] = {value++, 2147483647, -2147483648};
   
-  values[0] = ypr[1]*100;
-  values[1] = ypr[0]*100;
-  values[2] = output;
- values[3] = outputy;
-  
+
 
   if (setpointy > 4.0) {
     setpointy = ypr[0];
   }
-
-  //
-  /*  if (SerialBT.available() > 0)
-    {
-      SerialBT.readBytes(remote_buff, 4);
-
-      tiltNumber = remote_16[0];
-      yawNumber = remote_16[1];
-
-      float tiltDecode = ((float)tiltNumber) /(65535.0f)*(2.0f) - 1.05f;
-      float yawDecode = ((float)yawNumber) /(65535.0f)*(2.0f) - 1.0f;
-
-      tiltDecode *= 0.3;
-      yawDecode *= 0.2;
-
-      Serial.print("Received. Tilt:");
-      Serial.print(tiltDecode);
-      Serial.print(" Yaw:");
-      Serial.println(yawDecode);
-
-      setpoint = tiltDecode;
-      setpointy +=  yawDecode;
-
-      //setpoint = (0.4*((float)remote_16[0]))/((float)(2 << 16 - 1)) - 0.2;
-      //setpointy = 2*3.1415 * ((float)remote_16[1])/((float)(2 << 16)) - 3.1415;
-      //Serial.print(setpoint);
-     // Serial.print(" ");
-      //Serial.println(setpointy);
-    }*/
-
-  /*
-    client = server.available();
-    if (client){
-      if (client.available()) {
-        uint8_t buffer[PACKET_SIZE];
-        len = client.read(buffer, PACKET_SIZE);
-        const uint16_t* buff16 = (const uint16_t*)buffer;
-        tiltNumber = buff16[0];
-        yawNumber = buff16[1];
-
-        float tiltDecode = ((float)tiltNumber) /(65535.0f)*(2.0f) - 1.0f;
-        float yawDecode = ((float)yawNumber) /(65535.0f)*(2.0f) - 1.0f;
-
-        tiltDecode *= 0.2;
-        yawDecode *= 0.01;
-
-        Serial.print("Received. Tilt:");
-        Serial.print(tiltDecode);
-        Serial.print(" Yaw:");
-        Serial.println(yawDecode);
-
-        setpoint = tiltDecode;
-        setpointy +=  yawDecode;
-      }
-    }
-  */
 
   if (Serial.available() > 0)
   {
@@ -407,10 +347,26 @@ void loop() {
 
   unsigned long now = millis();
   
- // compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, now, &lastTime, 10, &lastInput, &outputSum);
- // compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
+  compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, now, &lastTime, 10, &lastInput, &outputSum);
+  compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
 
 
+
+  uint16_t send_p = ((ypr[1] + 3.14)*10436);
+  uint16_t send_y = ((ypr[1] + 3.14)*10436);
+  uint16_t send_o = (output+1000) * 33;
+  uint16_t send_g = (outputy+1000) * 33;
+  
+  uint8_t sendarray[]= {send_p & 0xff, send_p >> 8, send_y & 0xff, send_y >> 8,send_o & 0xff, send_o >> 8,send_g & 0xff, send_g >> 8, };
+  
+  values[0] = ypr[1]*100;
+  values[1] = ypr[0]*100;
+  values[2] = output;
+  values[3] = outputy;
+
+
+  
+  
 #ifdef DEBUG
   Serial.print(" input: ");
   Serial.print(input);
@@ -457,17 +413,16 @@ void loop() {
   }
       
   size_t bodyLen = generateBodyStr(httpBody, values);
+  
 
   if (millis() - postDelay > 10){
-           client.println(httpBody);
+          // client.println(httpBody);
+          client.write(sendarray, 8);
            postDelay = millis();
         //   value_ptr = 0;          
   }
 
  
-
-
-
 
     WiFiDrv::digitalWrite(25, LOW);
 
@@ -551,14 +506,6 @@ void initialize_ypr() {
 
 /*_____________________________________________________ YPR _______________________________________________________________*/
 void fetch_ypr(){
-
- /* if (!dmpReady) return;
-  if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)){
-    mpu.dmpGetQuaternion(&q, fifoBuffer);
-    mpu.dmpGetGravity(&gravity, &q);
-    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-  }*/
-
   /* if programming failed, don't try to do anything */
   if (!dmpReady) return;
   while (!mpuInterrupt && fifoCount < packetSize) {
@@ -648,10 +595,10 @@ size_t generateBodyStr(char* httpBody, int values[nb_fields]) {
   if (nb_fields == 0)
     return 0;
   // print the first field name and value as key=value pair
-  size_t bodyLen = sprintf(httpBody, "%s%d", field_names[0], values[0]);  
+  size_t bodyLen = sprintf(httpBody, "%d", values[0]);  
   for (size_t i = 1; i < nb_fields; i++) {  // append the remaining field names and values to the string
     // each pair is separated by an ampersand (&)
-    bodyLen += sprintf(&httpBody[bodyLen], "%s%d", field_names[i], values[i]);
+    bodyLen += sprintf(&httpBody[bodyLen], "%d", values[i]);
   }
   return bodyLen;
 }
