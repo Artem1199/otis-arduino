@@ -1,6 +1,0 @@
-# The language to output bindings in
-#
-# possible values: "C", "C++"
-#
-# default: "C++"
-language = "C"
