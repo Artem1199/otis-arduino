@@ -19,9 +19,6 @@ use num_traits::float::FloatCore;
 static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
 
 
-
-
-
 #[no_mangle]
 pub extern "C" fn foo() -> i32 {
 	66
@@ -105,8 +102,6 @@ pub extern "C" fn foo() -> i32 {
 //     PIDC::Compute(PIDC_ref, Input, now)
 
 // }
-
-
 
 
 //**************************************************************************************************************************************************** *//

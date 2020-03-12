@@ -1,8 +1,6 @@
 # README
 
 ## Compilation
-1. in your Arduino IDE, go to *File->Preferences->Additional Board Manager URLs* and paste `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`
-2. go to *Tools->Board Manager*, search for `ESP32` and install `esp32` board
-3. go to *Tools->Boards* and select `ESP32 Dev Module`
-4. compile and upload
-
+1. Compile Rust PID library /Rust-Cortex-M-PID/pid_control/build.sh, build.sh move the library and header to ~/Arduino/libraries/pid_control/src
+2. The library must have a library.properties file with precompile=true
+2. Compile .ino file for MKR 1010 and upload

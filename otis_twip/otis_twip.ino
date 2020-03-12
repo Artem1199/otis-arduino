@@ -9,8 +9,8 @@
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "SAMD21turboPWM.h"
 #include <pid_control.h>
-#include "PID_v1.h"
-
+#include "PID_v1.h" //cpp library for testing
+#include "Secrets.h"
 
 #define HOST "192.168.50.158"
 #define URI "/data.php"
@@ -147,8 +147,7 @@ String serBuff = "";
 #define IS_SERVER
 
 
-char ssid[] = "VladimirPutin_2G";
-char pass[] = "741593@Ro";
+
 int status = WL_IDLE_STATUS; 
 
 WiFiClient client;
