@@ -3,7 +3,22 @@
 #include <cstdlib>
 #include <new>
 
+struct PIDC {
+  double kp;
+  double ki;
+  double kd;
+  double SampleTime;
+  double Output;
+  double Setpoint;
+  double errSum;
+  double lastInput;
+  double lastTime;
+  double outputSum;
+};
+
 extern "C" {
+
+double compute_PIDC(PIDC *raw_ptr, double Input, double now);
 
 void compute_pid(double Input,
                  double *Output,
@@ -17,7 +32,13 @@ void compute_pid(double Input,
                  double *lastInput,
                  double *outputSum);
 
-int32_t foo();
+void create_PIDC(PIDC *raw_ptr, double kp, double ki, double kd, double SampleTime);
+
+extern PIDC *create_foo();
+
+void drop_PIDC(PIDC *x);
+
+int32_t foo2();
 
 double wraptopi_r(double x);
 

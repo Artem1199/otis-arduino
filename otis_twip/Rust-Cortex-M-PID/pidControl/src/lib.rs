@@ -10,6 +10,7 @@ extern crate cortex_m_rt as rt; // v0.5.x
 use alloc::boxed::Box;
 use alloc_cortex_m::CortexMHeap;
 use core::alloc::Layout;
+use core::marker::PhantomData;
 use cortex_m::asm;
 use num_traits::float::FloatCore;
 
@@ -20,88 +21,136 @@ static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
 
 
 #[no_mangle]
-pub extern "C" fn foo() -> i32 {
+pub extern "C" fn foo2() -> i32 {
 	66
 }
 
-// #[repr(C)]
-// pub struct PIDC {
-//     kp: f64,
-//     ki: f64,
-//     kd: f64,
-//     Output: f64,
-//     Setpoint: f64,
-//     errSum: f64,
-//     lastErr: f64,
-//     lastTime: f64,
+
+struct MyPIDC {
+    raw: *mut PIDC,
+}
+
+extern "C"{
+    fn create_foo() -> *mut PIDC;
+}
 
 
-// }
 
-// impl PIDC {
-//     fn new(kp:f64 , ki:f64, kd:f64) -> PIDC{
-//         PIDC{
-//             kp:kp,
-//             ki:ki,
-//             kd:kd,
-//             Output: 0.0,
-//             Setpoint: 0.0,
-//             errSum: 0.0,
-//             lastErr: 0.0,
-//             lastTime: 0.0,
-//         }
-//     }
+#[repr(C)]
+pub struct PIDC {
+    kp: f64,
+    ki: f64,
+    kd: f64,
+    SampleTime: f64,
+    Output: f64,
+    Setpoint: f64,
+    errSum: f64,
+    lastInput: f64,
+    lastTime: f64,
+    outputSum: f64,
 
-//     fn Compute(&mut self, Input:f64, now: f64)-> f64{
-//         let timeChange = now - self.lastTime;
 
-//         let error = self.Setpoint - Input;
+}
 
-//         self.errSum += error*timeChange;
+impl PIDC {
+    fn new(kp:f64 , ki:f64, kd:f64, SampleTime:f64) -> PIDC{
+        PIDC{
+            kp:kp,
+            ki:ki,
+            kd:kd,
+            SampleTime: SampleTime,
+            Output: 0.0,
+            Setpoint: 0.0,
+            errSum: 0.0,
+            lastInput: 0.0,
+            lastTime: 0.0,
+            outputSum: 0.0,
+        }
+    }
 
-//         let dErr = (error - self.lastErr) / timeChange;
+    fn Compute(&mut self, Input:f64, now: f64)-> f64{
 
-//         self.Output = self.kp * error + self.ki * self.errSum + self.kd * dErr;
+        let timeChange = now - self.lastTime;
 
-//         self.lastErr = error;
+        if timeChange >= self.SampleTime{
 
-//         self.lastTime = now;
+            let error = wraptopi_r(self.Setpoint - Input);
+            let dInput = Input - self.lastInput;
 
-//         self.Output
+            self.outputSum += self.ki * error * self.SampleTime/1000.0;
+
+                if self.outputSum > 1000.0 
+                    {self.outputSum = 1000.0;}
+                else if self.outputSum < -1000.0
+                    {self.outputSum = -1000.0;}
+
+            self.Output = self.kp * error + self.ki * error * self.SampleTime/1000.0 - self.kd * dInput * 1000.0/self.SampleTime;
+
+
+            if self.Output > 1000.0 {self.Output = 1000.0;}
+            else if self.Output < -1000.0 {self.Output = -1000.0;}
+
+
+            self.lastTime = now;
+            self.lastInput = Input;
+            self.Output
+        } 
         
-//     }
-// }
-
-// impl Drop for PIDC {
-// 	fn drop(&mut self) {
-// 	}
-// }
-
-
-// #[no_mangle]
-// pub extern "C" fn drop_PIDC(x: *mut PIDC){
-//     unsafe{
+        else{
+            self.Output
+        }
         
-//         Box::from_raw(x);
-//     }
-// }
+    }
+
+
+}
+
+impl Drop for PIDC {
+	fn drop(&mut self) {
+	}
+}
+
+
+#[no_mangle]
+pub extern "C" fn drop_PIDC(x: *mut PIDC){
+    unsafe{
+        
+        Box::from_raw(x);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn create_PIDC(raw_ptr: *mut PIDC, kp: f64, ki: f64, kd: f64, SampleTime: f64){
+
+    //let PIDC_rust = unsafe{Box::from_raw(raw_ptr)};
+
+    let mut PIDC_ref = unsafe{
+        assert!(!raw_ptr.is_null());
+        &mut *raw_ptr
+    };
+
+    *PIDC_ref =  PIDC::new(kp, ki, kd, SampleTime);
+
+   // Box::into_raw(Box::new(new_PIDC))
+}
 
 // #[no_mangle]
 // pub extern "C" fn create_PIDC(kp: f64, ki: f64, kd: f64) -> *mut PIDC {
 //     let new_PIDC = PIDC::new(kp,ki, kd);
-//     Box::into_raw(Box::new(new_PIDC))
+//    Box::into_raw(Box::new(new_PIDC))
 // }
 
-// #[no_mangle]
-// pub extern "C" fn compute_PIDC(raw_ptr: *mut PIDC, Input: f64, now: f64) -> f64 {
 
-//     let PIDC_ref = unsafe{
-//         assert!(!raw_ptr.is_null());
-//         &mut *raw_ptr
-//     };
-//     PIDC::Compute(PIDC_ref, Input, now)
+#[no_mangle]
+pub extern "C" fn compute_PIDC(raw_ptr: *mut PIDC, Input: f64, now: f64) -> f64 {
 
-// }
+    let PIDC_ref = unsafe{
+        assert!(!raw_ptr.is_null());
+        &mut *raw_ptr
+    };
+    PIDC::Compute(PIDC_ref, Input, now)
+
+}
 
 
 //**************************************************************************************************************************************************** *//
