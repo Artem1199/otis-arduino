@@ -6,7 +6,6 @@ extern crate alloc;
 extern crate alloc_cortex_m;
 extern crate cortex_m_rt as rt; // v0.5.x
 
-
 use alloc::boxed::Box;
 use alloc_cortex_m::CortexMHeap;
 use core::alloc::Layout;
@@ -14,27 +13,8 @@ use core::marker::PhantomData;
 use cortex_m::asm;
 use num_traits::float::FloatCore;
 
-
-
 #[global_allocator]
 static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
-
-
-#[no_mangle]
-pub extern "C" fn foo2() -> i32 {
-	66
-}
-
-
-struct MyPIDC {
-    raw: *mut PIDC,
-}
-
-extern "C"{
-    fn create_foo() -> *mut PIDC;
-}
-
-
 
 #[repr(C)]
 pub struct PIDC {
@@ -110,7 +90,6 @@ impl Drop for PIDC {
 	}
 }
 
-
 #[no_mangle]
 pub extern "C" fn drop_PIDC(x: *mut PIDC){
     unsafe{
@@ -118,6 +97,7 @@ pub extern "C" fn drop_PIDC(x: *mut PIDC){
         Box::from_raw(x);
     }
 }
+
 
 #[no_mangle]
 pub extern "C" fn create_PIDC(raw_ptr: *mut PIDC, kp: f64, ki: f64, kd: f64, SampleTime: f64){

@@ -34,11 +34,7 @@ void compute_pid(double Input,
 
 void create_PIDC(PIDC *raw_ptr, double kp, double ki, double kd, double SampleTime);
 
-extern PIDC *create_foo();
-
 void drop_PIDC(PIDC *x);
-
-int32_t foo2();
 
 double wraptopi_r(double x);
 
