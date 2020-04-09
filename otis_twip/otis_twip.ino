@@ -231,7 +231,6 @@ int count = 0;
 int countmax = 0;
 
 unsigned long evalDelay = millis();
-
 unsigned long timediff = 0;
 unsigned long sendcounter = 0;
 unsigned long notcounter = 0;
@@ -241,8 +240,6 @@ bool client_avi = false;
 
 int send_c = 0;
 
-const size_t httpBodySize = 128;
-char httpBody[httpBodySize];
 
 unsigned long loopdiff;
 
@@ -257,11 +254,6 @@ void loop() {
     }
   input = ypr[1];
   inputy = ypr[0];
-
-  
-
-  
-  
   
   //Serial.print("Eqv Values:");
   //Serial.print(send_p);

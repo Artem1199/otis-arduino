@@ -21,12 +21,13 @@ cbindgen:
 
 SAMD Library and WifiNINA library
 
-Inclue -> Manage Libraries -> search for `SAMD` 
+Inclue -> Manage Libraries -> search for `SAMD` and install
+Inclue -> Manage Libraries -> search for `WifiNINA` and install 
 
 `Secrets.h` holds Wifi ssid/pass in format:
 
 `const char* ssid = "XXXXXXXXXX";`
 `const char* pass = "XXXXXXXXXX";`
 
-Place `pid_control folder in arduino auto install libraries directory (usually ~/Arduino/libraries).  Run ./build.sh to recompile and replace PID library.
+Place `pid_control` folder in arduino auto install libraries directory (usually ~/Arduino/libraries).  Run ./build.sh to recompile and replace PID library.
 
