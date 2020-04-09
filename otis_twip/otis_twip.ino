@@ -8,31 +8,17 @@
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "SAMD21turboPWM.h"
-#include <pid_control.h>
 #include "PID_v1.h" //cpp library for testing
 #include "Secrets.h"
 
 #define HOST "192.168.50.158"
-#define URI "/data.php"
-#define PORT 80
-#define APIKEYVALUE "1"
-const char* httpHeader =         "POST " URI " HTTP/1.1\r\n"
-                                 "Host: " HOST "\r\n"
-                                 "Content-Type: application/x-www-form-urlencoded\r\n"
-                                 "Connection: keep-alive\r\n"
-                                 "Content-Length: ";
-                                 
-String httpHeaderS = "POST /data.php HTTP/1.1\r\nHost: 192.168.50.158 \r\nContent-Type: application/x-www-form-urlencoded\r\nConnection: keep-alive\r\nContent-Length: ";
-
-
-const char* field_names[] = {"", "", "",""};
-const size_t nb_fields = sizeof(field_names) / sizeof (field_names[0]);
-
 
 #include <WiFiNINA.h>                                 
 #include <SPI.h>
 #include <WiFiUdp.h>
 #include <utility/wifi_drv.h>
+#include <pid_control.h>
+
 
 #define DEBUG 
 /* MACROS */
@@ -283,10 +269,6 @@ void loop() {
  // Serial.println(ypr[1]);
 
 
- static int value = 0;
-  int values[nb_fields] = {value++, 2147483647, -2147483648};
-  
-
 
   if (setpointy > 4.0) {
     setpointy = ypr[0];
@@ -358,13 +340,6 @@ void loop() {
   
   uint8_t sendarray[]= {send_p & 0xff, send_p >> 8, send_y & 0xff, send_y >> 8,send_o & 0xff, send_o >> 8,send_g & 0xff, send_g >> 8, };
   
-  values[0] = ypr[1]*100;
-  values[1] = ypr[0]*100;
-  values[2] = output;
-  values[3] = outputy;
-
-
-  
   
 #ifdef DEBUG
   Serial.print(" input: ");
@@ -410,8 +385,6 @@ void loop() {
     pwm.analogWrite(PWM0, 0);
     pwm.analogWrite(PWM1, 0);
   }
-      
-  size_t bodyLen = generateBodyStr(httpBody, values);
   
 
   if (millis() - postDelay > 10){
@@ -574,34 +547,6 @@ void initialize_wifi(){
   
   return;
 }
-
-
-/*_____________________________________________________ HTTP _______________________________________________________________*/
-
-void post_data(WiFiClient client, size_t bodyLen, char* httpBody) {
-  client.print(httpHeader);
-  client.println(bodyLen);
-  client.println();
-  client.print(httpBody);
-
-  data_sent = true;
-
-  return;
-}
-
-
-size_t generateBodyStr(char* httpBody, int values[nb_fields]) {
-  if (nb_fields == 0)
-    return 0;
-  // print the first field name and value as key=value pair
-  size_t bodyLen = sprintf(httpBody, "%d", values[0]);  
-  for (size_t i = 1; i < nb_fields; i++) {  // append the remaining field names and values to the string
-    // each pair is separated by an ampersand (&)
-    bodyLen += sprintf(&httpBody[bodyLen], "%d", values[i]);
-  }
-  return bodyLen;
-}
-
 
 /*_____________________________________________________ WiFi _______________________________________________________________*/
 
