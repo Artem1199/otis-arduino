@@ -5,6 +5,8 @@
 2. The library must have a library.properties file with precompile=true
 2. Compile .ino file for MKR 1010 and upload
 
+Arduino IDE: File -> Preferences -> Enable `Show verbose output for compilation` and `upload`
+
 Requires: `Rust`,`Rust nightly`, `cbindgen`, `SAMD Arduino Libraries`, `WifiNINA`
 
 Rust: 
