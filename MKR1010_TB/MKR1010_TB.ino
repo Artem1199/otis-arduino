@@ -11,11 +11,8 @@
 #include "PID_v1.h" //cpp library for testing
 #include "Secrets.h"
 
-#define HOST "192.168.50.158"
-
 #include <WiFiNINA.h>                                 
 #include <SPI.h>
-#include <WiFiUdp.h>
 #include <utility/wifi_drv.h>
 #include <pid_control.h>
 
@@ -38,8 +35,8 @@
 WiFiServer server(80);
 bool data_sent = false;
 /* System Tuning */
-uint16_t gyro_bias[] = {10, 7, 14};
-uint16_t accel_z_bias = 900;
+uint16_t accel_bias[] = {-752, -2120, 1234};
+uint16_t gyro_bias[] = {18, 2, -51};
 
 /* MPU6050 Device Context */
 MPU6050 mpu;
@@ -100,9 +97,11 @@ double setpointy = 100.0;
 double inputy, outputy;
 double inputy_old, outputy_old;
 
-double Kpy = 50;
-double Kiy = 40;
-double Kdy = 0;
+double Kpy = 15;
+double Kdy = 2;
+double Kiy = 0;
+PID pidTilt(&input, &output, &setpoint, Kpt, Kit, Kdt, DIRECT);
+PID pidYaw(&inputy, &outputy, &setpointy, Kpy, Kiy, Kdy, DIRECT);
 
 double errSumy, lastTimey, lastInputy = 0, outputSumy = 0;
 //PID pidTilt(&input, &output_old, &setpoint, Kpt, Kit, Kdt, DIRECT);
@@ -166,14 +165,18 @@ void setup() {
   WiFiDrv::pinMode(27, OUTPUT); //BLUE
   WiFiDrv::digitalWrite(26, HIGH); // for full brightness
 
+  /* Setup PID */
+  pidTilt.SetMode(AUTOMATIC);
+  pidTilt.SetSampleTime(10);
+  pidTilt.SetOutputLimits(-255, 255); 
 
+  pidYaw.SetMode(AUTOMATIC);
+  pidYaw.SetSampleTime(10);
+  pidYaw.SetOutputLimits(-255, 255);
 
   digitalWrite(12, LOW);
   digitalWrite(13, LOW);
-
-  /* Create Bluetooth Serial */
-  //SerialBT.begin("OTIS-BOT");
-  /* Set the serial baud rate*/
+  
   Serial.begin(SERIAL_BAUD);
   //while (!Serial) {
   //  ; // wait for serial port to connect. Needed for native USB port only
@@ -194,12 +197,6 @@ void setup() {
   WiFiDrv::digitalWrite(26, LOW); // for full brightness
   WiFiDrv::digitalWrite(27, HIGH); // for full brightness
   /* Setup the IMU and relevant buffers */
-  initialize_ypr();
-  
-
-client.stop();
-
-
   initialize_ypr();
 
  /* init PID values */
@@ -226,27 +223,13 @@ client.stop();
 
 }
 
-unsigned long hold = millis();
-int count = 0;
-int countmax = 0;
-
-unsigned long evalDelay = millis();
-unsigned long timediff = 0;
-unsigned long sendcounter = 0;
-unsigned long notcounter = 0;
-bool client_avi = false;
 
 /*_____________________________________________________ LOOP _______________________________________________________________*/
 
-int send_c = 0;
-
-
-unsigned long loopdiff;
 
 void loop() {
 
   
-  loopdiff = micros();
   fetch_ypr();
   
     if (input != ypr[1]){
@@ -254,97 +237,25 @@ void loop() {
     }
   input = ypr[1];
   inputy = ypr[0];
-  
-  //Serial.print("Eqv Values:");
-  //Serial.print(send_p);
- // Serial.print(" ");
- // Serial.println(ypr[1]);
 
+  Serial.print(ypr[0]);
+  Serial.print("  ");
+  Serial.println(ypr[1]);
 
 
   if (setpointy > 4.0) {
     setpointy = ypr[0];
   }
 
-  if (Serial.available() > 0)
-  {
-    Serial.setTimeout(90);
-    serBuff = Serial.readString();
-
-    if (serBuff.substring(0, 4) == "KILL") {
-      Serial.println("Killing Motors");
-      // TODO: Kill Motors
-    } else if (serBuff.substring(0, 7) == "SETTILT") {
-      double tiltAngle;
-      char __serBuff[sizeof(serBuff)];
-      serBuff.toCharArray(__serBuff, sizeof(__serBuff));
-      int result = sscanf(__serBuff, "SETTILT %lf", &tiltAngle);
-      Serial.print("Setting Tilt: ");
-      Serial.println(tiltAngle / 100);
-      setpoint = tiltAngle / 100.0;
-    } else if (serBuff.substring(0, 6) == "SETYAW") {
-      double yawAngle;
-      char __serBuff[sizeof(serBuff)];
-      serBuff.toCharArray(__serBuff, sizeof(__serBuff));
-      int result = sscanf(__serBuff, "SETYAW %lf", &yawAngle);
-      Serial.print("Setting yaw: ");
-      Serial.println(yawAngle / 100);
-      setpointy = yawAngle / 100.0;
-
-    } else if (serBuff.substring(0, 6) == "SETPID") {
-      double kpt, kit, kdt;
-      char __serBuff[sizeof(serBuff)];
-      serBuff.toCharArray(__serBuff, sizeof(__serBuff));
-      int result = sscanf(__serBuff, "SETPID %lf %lf %lf", &kpt, &kit, &kdt);
-
-      //      pidTilt.SetTunings((double)kpt, (double)kit, (double)kdt);
-
-      Serial.print("PID Gains Changed. P:");
-      //      Serial.print(pidTilt.GetKp());
-      Serial.print(" I:");
-      //      Serial.print(pidTilt.GetKi());
-      Serial.print(" D:");
-      //      Serial.println(pidTilt.GetKd());
-    }
-  }
-
-
-  //Serial.print(" input: ");
- // Serial.print(input);
-  //Serial.print(" inputy: ");
-  //Serial.print(inputy);
-#ifdef DEBUG
-  Serial.print(" lI: ");
-  Serial.print(lastInput);
-#endif
-
-  unsigned long now = millis();
+ //unsigned long now = millis();
   
-  compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, now, &lastTime, 10, &lastInput, &outputSum);
-  compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
-
-
-
-  uint16_t send_p = ((ypr[1] + 3.14)*10436);
-  uint16_t send_y = ((ypr[1] + 3.14)*10436);
-  uint16_t send_o = (output+1000) * 33;
-  uint16_t send_g = (outputy+1000) * 33;
+  //compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, now, &lastTime, 10, &lastInput, &outputSum);
+  //compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
   
-  uint8_t sendarray[]= {send_p & 0xff, send_p >> 8, send_y & 0xff, send_y >> 8,send_o & 0xff, send_o >> 8,send_g & 0xff, send_g >> 8, };
-  
-  
-#ifdef DEBUG
-  Serial.print(" input: ");
-  Serial.print(input);
-  Serial.print(" lT: ");
-  Serial.print(lastTime);
-  Serial.print(" oS: ");
-  Serial.print(outputSum);
-  Serial.print(" O: ");
-  Serial.println(output);
-#endif
+  pidTilt.Compute();
+  pidYaw.Compute();
 
-  out0 = output - outputy;
+  out0 = output;
   out1 = output + outputy;
 
 
@@ -362,10 +273,21 @@ void loop() {
 
   double duty_mag0 = abs(1000.0 / 50.0 * min((double)50, abs(out0)));
   double duty_mag1 = abs(1000.0 / 50.0 * min((double)50, abs(out1)));
+
+ 
+  float absypr = abs(ypr[1]);
+  Serial.print(absypr);
+  float mypr= map(absypr*100, 0, 130, 0, 1000.0);
+
+  Serial.print(mypr);
+
+  pwm.analogWrite(PWM0, mypr);
+
+  
   // dutyCycle0 = (uint8_t)duty_mag0;
   // dutyCycle1 = (uint8_t)duty_mag1;
 
-  if (fabs(input) < 0.6) {
+ /* if (fabs(input) < 0.6) {
     pwm.analogWrite(PWM0, duty_mag0);
     pwm.analogWrite(PWM1, duty_mag1);
 //    Serial.print(" duty_mag0: ");
@@ -376,21 +298,12 @@ void loop() {
   } else {
     pwm.analogWrite(PWM0, 0);
     pwm.analogWrite(PWM1, 0);
-  }
+  }*/
   
-
-  if (millis() - postDelay > 10){
-          // client.println(httpBody);
-          client.write(sendarray, 8);
-           postDelay = millis();
-        //   value_ptr = 0;          
-  }
 
  
 
     WiFiDrv::digitalWrite(25, LOW);
-
-   Serial.println(micros() - loopdiff);
 }
 
 /*_____________________________________________________ PWM _______________________________________________________________*/
@@ -435,10 +348,13 @@ void initialize_ypr() {
   //uint8_t a = 1;
   //mpu.dmpSetFIFORate(a);
   /* Set the device biases appropiately */
+  mpu.setXAccelOffset(accel_bias[0]);
+  mpu.setYAccelOffset(accel_bias[1]);
+  mpu.setZAccelOffset(accel_bias[2]);
   mpu.setXGyroOffset(gyro_bias[0]);
   mpu.setYGyroOffset(gyro_bias[1]);
   mpu.setZGyroOffset(gyro_bias[2]);
-  mpu.setZAccelOffset(accel_z_bias);
+
 
   if (devStatus == 0)
   {
@@ -504,57 +420,4 @@ void fetch_ypr(){
     //Serial.println(ypr[0]);
   }
   
-}
-
-/*_____________________________________________________ WIFI _______________________________________________________________*/
-
-void initialize_wifi(){
-
-  // check for the WiFi module:
-  if (WiFi.status() == WL_NO_MODULE) {
-    Serial.println("Communication with WiFi module failed!");
-    // don't continue
-    while (true);
-  }
-
-    String fv = WiFi.firmwareVersion();
-  if (fv < WIFI_FIRMWARE_LATEST_VERSION) {
-    Serial.println("Please upgrade the firmware");
-  }
-
-  // attempt to connect to Wifi network:
-  while (status != WL_CONNECTED) {
-    Serial.print("Attempting to connect to WPA SSID: ");
-    Serial.println(ssid);
-    // Connect to WPA/WPA2 network:
-    status = WiFi.begin(ssid, pass);
-
-    // wait 10 seconds for connection: 
-    delay(3000);
-  }
-  printWiFiStatus();
-
-  // you're connected now, so print out the data:
-  Serial.println("You're connected to the network");
-  
-  return;
-}
-
-/*_____________________________________________________ WiFi _______________________________________________________________*/
-
-void printWiFiStatus() {
-  // print the SSID of the network you're attached to:
-  Serial.print("SSID: ");
-  Serial.println(WiFi.SSID());
-
-  // print your board's IP address:
-  IPAddress ip = WiFi.localIP();
-  Serial.print("IP Address: ");
-  Serial.println(ip);
-
-  // print the received signal strength:
-  long rssi = WiFi.RSSI();
-  Serial.print("signal strength (RSSI):");
-  Serial.print(rssi);
-  Serial.println(" dBm");
 }
