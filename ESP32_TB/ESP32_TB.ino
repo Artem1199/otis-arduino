@@ -154,9 +154,11 @@ void setup() {
  
 }
 
-
+unsigned long looptime = micros();
 
 void loop() {
+
+  looptime = micros();
 
   fetch_ypr();
   input = ypr[1];
@@ -187,39 +189,9 @@ void loop() {
     setpoint = tiltDecode;
     setpointy +=  yawDecode;   
 
-    //setpoint = (0.4*((float)remote_16[0]))/((float)(2 << 16 - 1)) - 0.2;
-    //setpointy = 2*3.1415 * ((float)remote_16[1])/((float)(2 << 16)) - 3.1415;
-    //Serial.print(setpoint);
-   // Serial.print(" ");
-    //Serial.println(setpointy);
+
   }
 
-/*
- client = server.available();
-  if (client){  
-    if (client.available()) {
-      uint8_t buffer[PACKET_SIZE];
-      len = client.read(buffer, PACKET_SIZE);
-      const uint16_t* buff16 = (const uint16_t*)buffer;
-      tiltNumber = buff16[0];
-      yawNumber = buff16[1];
-
-      float tiltDecode = ((float)tiltNumber) /(65535.0f)*(2.0f) - 1.0f;
-      float yawDecode = ((float)yawNumber) /(65535.0f)*(2.0f) - 1.0f;
-
-      tiltDecode *= 0.2;
-      yawDecode *= 0.01;
-
-      Serial.print("Received. Tilt:");
-      Serial.print(tiltDecode);
-      Serial.print(" Yaw:");
-      Serial.println(yawDecode);
-
-      setpoint = tiltDecode;
-      setpointy +=  yawDecode;
-    }
-  }
-  */
   
   if(Serial.available() > 0)
   {   
@@ -264,14 +236,15 @@ void loop() {
   }
  
 
-  
-
-  Serial.print( ypr[0]);
-  Serial.print(" ");
-  Serial.println(ypr[1]);
-  
   pidTilt.Compute();
   pidYaw.Compute();
+
+  Serial.print(" ypr[0]: ");
+  Serial.print(ypr[0]);
+  Serial.print(" ypr[1]: ");
+  Serial.print(ypr[1]);
+  Serial.print(" out0: ");
+  Serial.print(out0);
 
   out0 = output;
   out1 = output + outputy;
@@ -302,18 +275,18 @@ void loop() {
 
   }*/
 
-
-
+  Serial.print(" duCy0: ");
+  Serial.print(dutyCycle0);
+   
+  Serial.print(" DC: ");
+  Serial.print((duty_mag0/255.0)*100);
    
   float absypr = abs(ypr[1]);
-  Serial.print(absypr);
   float mypr= map(absypr*100, 0, 130, 0, 255.0);
 
-  Serial.print(mypr);
-
-  ledcWrite(pwmChannel0, mypr);
-
-  
+  ledcWrite(pwmChannel0, duty_mag0);
+   Serial.print(" Time: ");
+   Serial.println(micros() - looptime);
 }
 
 void initialize_pwm(){

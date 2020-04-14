@@ -87,19 +87,18 @@ double errSum, lastTime, lastInput= 0, outputSum = 0;
 //double Kpt = 90;
 //double Kit = 100;
 //double Kdt = 7;
-
-double Kpt = 80;
-double Kit = 91;
-double Kdt = 0;
+double Kpt = 120;
+double Kdt = 5;
+double Kit = 150;
+double Kpy = 15;
+double Kdy = 2;
+double Kiy = 0;
 
 
 double setpointy = 100.0;
 double inputy, outputy;
 double inputy_old, outputy_old;
 
-double Kpy = 15;
-double Kdy = 2;
-double Kiy = 0;
 PID pidTilt(&input, &output, &setpoint, Kpt, Kit, Kdt, DIRECT);
 PID pidYaw(&inputy, &outputy, &setpointy, Kpy, Kiy, Kdy, DIRECT);
 
@@ -135,12 +134,6 @@ String serBuff = "";
 
 int status = WL_IDLE_STATUS; 
 
-WiFiClient client;
-enum Protocol {
-  TILT_SET,
-  YAW_SET
-};
-
 /*
   
   Server server(SERVER_PORT);
@@ -154,8 +147,6 @@ uint16_t tiltNumber, yawNumber;
 TurboPWM pwm;
 
 unsigned long postDelay = millis();
-
-String apiKeyValue = "1";
 
 /*_____________________________________________________ SETUP _______________________________________________________________*/
 
@@ -206,18 +197,6 @@ void setup() {
   input = ypr[1];
   inputy = ypr[0];
 
- /* while(!client){
-     client = server.available();
-     if (client.connected()) {
-      while (client.available()){
-        client.read(); 
-      }
-      client.write("Ack\n"); 
-           //client.println("hello"); 
-     break;}
-     delay(10);
-     }*/
-
   WiFiDrv::digitalWrite(27, LOW); // for full brightness
   WiFiDrv::digitalWrite(25, HIGH); // for full brightness
 
@@ -227,8 +206,13 @@ void setup() {
 /*_____________________________________________________ LOOP _______________________________________________________________*/
 
 
+unsigned long looptime = micros();
+
 void loop() {
 
+    looptime = micros();
+
+  
   
   fetch_ypr();
   
@@ -238,23 +222,20 @@ void loop() {
   input = ypr[1];
   inputy = ypr[0];
 
-  Serial.print(ypr[0]);
-  Serial.print("  ");
-  Serial.println(ypr[1]);
-
 
   if (setpointy > 4.0) {
     setpointy = ypr[0];
   }
 
- //unsigned long now = millis();
-  
-  //compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, now, &lastTime, 10, &lastInput, &outputSum);
-  //compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
-  
   pidTilt.Compute();
   pidYaw.Compute();
 
+  Serial.print(" p: ");
+  Serial.print(ypr[1]);
+  Serial.print(" o0: ");
+  Serial.print(out0);
+  
+  
   out0 = output;
   out1 = output + outputy;
 
@@ -271,39 +252,22 @@ void loop() {
     digitalWrite(DR1, false);
   }
 
-  double duty_mag0 = abs(1000.0 / 50.0 * min((double)50, abs(out0)));
+  double duty_mag0 = abs(255.0 / 50.0 * min((double)50, abs(out0)));
   double duty_mag1 = abs(1000.0 / 50.0 * min((double)50, abs(out1)));
 
- 
-  float absypr = abs(ypr[1]);
-  Serial.print(absypr);
-  float mypr= map(absypr*100, 0, 130, 0, 1000.0);
-
-  Serial.print(mypr);
-
-  pwm.analogWrite(PWM0, mypr);
-
+  duty_mag0 = map(duty_mag0, 0, 255, 0, 1000);
+  Serial.print(" DC: ");
+  Serial.print((duty_mag0/1000.0)*100);
   
-  // dutyCycle0 = (uint8_t)duty_mag0;
-  // dutyCycle1 = (uint8_t)duty_mag1;
+   Serial.print(" Time: ");
 
- /* if (fabs(input) < 0.6) {
-    pwm.analogWrite(PWM0, duty_mag0);
-    pwm.analogWrite(PWM1, duty_mag1);
-//    Serial.print(" duty_mag0: ");
-//    Serial.print(duty_mag0);
-//    Serial.print(" duty_mag1: ");
-//    Serial.print(duty_mag1);
 
-  } else {
-    pwm.analogWrite(PWM0, 0);
-    pwm.analogWrite(PWM1, 0);
-  }*/
-  
+  pwm.analogWrite(PWM0, duty_mag0);
 
- 
 
     WiFiDrv::digitalWrite(25, LOW);
+
+ Serial.println(micros() - looptime);
 }
 
 /*_____________________________________________________ PWM _______________________________________________________________*/
