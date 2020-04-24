@@ -6,40 +6,34 @@
 
 #include <Wire.h>
 #include "I2Cdev.h"
-#include "MPU6050_6Axis_MotionApps20.h"
-#include "SAMD21turboPWM.h"
-#include "PID_v1.h" //cpp library for testing
 #include "Secrets.h"
-
-#define HOST "192.168.50.158"
-
-#include <WiFiNINA.h>                                 
+                                 
 #include <SPI.h>
+#include <WiFiNINA.h>
 #include <WiFiUdp.h>
 #include <utility/wifi_drv.h>
+
+#include "PID_v1.h"
 #include <pid_control.h>
 
+#include "Adafruit_MotorShield.h"
+#include "MPU6050_6Axis_MotionApps20.h"
 
-#define DEBUG 
+
+//#define DEBUG 
 /* MACROS */
 #define SERIAL_BAUD 115200
 #define I2C_FAST_MODE 400000
 #define MPU_INT 0
-/* Dual H-bridge macros */
-#define DR1 5
-#define PWM1 4
-#define NEN1 3
+#define HOST "192.168.50.158"
 
-#define DR0 1
-#define PWM0 2
-#define NEN0 0
 
-//WiFiClient client;
 WiFiServer server(80);
-bool data_sent = false;
+
+
 /* System Tuning */
-uint16_t gyro_bias[] = {10, 7, 14};
-uint16_t accel_z_bias = 900;
+uint16_t gyro_bias[] = {30, -10, 62};
+uint16_t accel_bias[] = {-1167, -2147, 1251};
 
 /* MPU6050 Device Context */
 MPU6050 mpu;
@@ -66,25 +60,23 @@ float ypr[3];
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 void dmpDataReady() {
   mpuInterrupt = true;
- // Serial.println("IT");
-
 }
 
-/* Setting PWM properties */
-const int freq = 30000;
-const int pwmChannel0 = 0;
-const int pwmChannel1 = 1;
-const int resolution = 8;
+/* Setting Motor Shield properties */
+Adafruit_MotorShield AFMS = Adafruit_MotorShield();
+Adafruit_DCMotor *myMotor1 = AFMS.getMotor(1);
+Adafruit_DCMotor *myMotor2 = AFMS.getMotor(2);
 uint8_t dutyCycle0 = 200;
 uint8_t dutyCycle1 = 200;
 
+
+
 /* PID properties */
-double originalSetpoint = -0.05;
+double originalSetpoint = -0.21;
 double setpoint = originalSetpoint;
 double movingAngleOffset = 0.1;
 double input, output;
 double input_old, output_old;
-
 double errSum, lastTime, lastInput= 0, outputSum = 0;
 
 //double Kpt = 90;
@@ -123,13 +115,10 @@ const uint16_t* remote_16 = (const uint16_t*)remote_buff;
 String serBuff = "";
 
 /* Websockets Control */
-
 //#define SSID "OTIS-bot"
 //#define PASSWORD "japery2019"
 #define SERVER_PORT 4141
-
 #define PACKET_SIZE 4
-
 #define IS_SERVER
 
 
@@ -152,11 +141,8 @@ uint16_t tiltNumber, yawNumber;
 
 //BluetoothSerial SerialBT;
 
-TurboPWM pwm;
-
 unsigned long postDelay = millis();
 
-String apiKeyValue = "1";
 
 /*_____________________________________________________ SETUP _______________________________________________________________*/
 
@@ -180,14 +166,13 @@ void setup() {
   //}
   delay(1000);
   
+  AFMS.begin();
   pinMode(LED_BUILTIN, OUTPUT);
   /* Setup the I2C bus */
 
  Wire.begin();
  Wire.setClock(400000);
-
-  /* Setup the motors */
-  initialize_pwm();
+ 
   /* Setup wifi */
   //initialize_wifi();
   server.begin();
@@ -197,10 +182,8 @@ void setup() {
   initialize_ypr();
   
 
-client.stop();
+  client.stop();
 
-
-  initialize_ypr();
 
  /* init PID values */
   lastTime = millis() - 10;
@@ -238,15 +221,14 @@ bool client_avi = false;
 
 /*_____________________________________________________ LOOP _______________________________________________________________*/
 
-int send_c = 0;
 
 
-unsigned long loopdiff;
+//unsigned long loopdiff;
 
 void loop() {
 
   
-  loopdiff = micros();
+ // loopdiff = micros();
   fetch_ypr();
   
     if (input != ypr[1]){
@@ -307,12 +289,6 @@ void loop() {
       //      Serial.println(pidTilt.GetKd());
     }
   }
-
-
-  //Serial.print(" input: ");
- // Serial.print(input);
-  //Serial.print(" inputy: ");
-  //Serial.print(inputy);
 #ifdef DEBUG
   Serial.print(" lI: ");
   Serial.print(lastInput);
@@ -322,8 +298,6 @@ void loop() {
   
   compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, now, &lastTime, 10, &lastInput, &outputSum);
   compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
-
-
 
   uint16_t send_p = ((ypr[1] + 3.14)*10436);
   uint16_t send_y = ((ypr[1] + 3.14)*10436);
@@ -341,84 +315,61 @@ void loop() {
   Serial.print(" oS: ");
   Serial.print(outputSum);
   Serial.print(" O: ");
-  Serial.println(output);
+  Serial.print(output);
 #endif
 
   out0 = output - outputy;
   out1 = output + outputy;
 
 
-  if (out0 > 0.0) {
-    digitalWrite(DR0, false);
+#ifdef DEBUG
+  Serial.print(" o0: ");
+  Serial.print(out0);
+  Serial.print(" o1: ");
+  Serial.println(out1);
+#endif
+
+
+  Serial.print(" ");
+  Serial.print(out0);
+  Serial.print(" ");
+  Serial.println(out1);
+
+  if (out0 < 0.0) {
+     myMotor1->run(BACKWARD);
   } else {
-    digitalWrite(DR0, true);
+    myMotor1->run(FORWARD);
   }
-  //Serial.print(" BP F ");
   if (out1 > 0.0) {
-    digitalWrite(DR1, true);
+     myMotor2->run(FORWARD);
   } else {
-    digitalWrite(DR1, false);
+    myMotor2->run(BACKWARD);
   }
 
-  double duty_mag0 = abs(1000.0 / 50.0 * min((double)50, abs(out0)));
-  double duty_mag1 = abs(1000.0 / 50.0 * min((double)50, abs(out1)));
-  // dutyCycle0 = (uint8_t)duty_mag0;
-  // dutyCycle1 = (uint8_t)duty_mag1;
+
+  double duty_mag0 = abs(255.0/50.0*min(50.0, abs(out0)));
+  double duty_mag1 = abs(255.0/50.0*min(50.0, abs(out1)));
+  dutyCycle0 = (uint8_t)duty_mag0;
+  dutyCycle1 = (uint8_t)duty_mag1;
+
 
   if (fabs(input) < 0.6) {
-    pwm.analogWrite(PWM0, duty_mag0);
-    pwm.analogWrite(PWM1, duty_mag1);
-//    Serial.print(" duty_mag0: ");
-//    Serial.print(duty_mag0);
-//    Serial.print(" duty_mag1: ");
-//    Serial.print(duty_mag1);
+    myMotor1->setSpeed(dutyCycle0);
+    myMotor2->setSpeed(dutyCycle1);
 
   } else {
-    pwm.analogWrite(PWM0, 0);
-    pwm.analogWrite(PWM1, 0);
+  myMotor1->setSpeed(0);
+  myMotor2->setSpeed(0);
   }
   
-
   if (millis() - postDelay > 10){
-          // client.println(httpBody);
           client.write(sendarray, 8);
-           postDelay = millis();
-        //   value_ptr = 0;          
+          postDelay = millis();        
   }
-
- 
 
     WiFiDrv::digitalWrite(25, LOW);
 
-   Serial.println(micros() - loopdiff);
-}
-
-/*_____________________________________________________ PWM _______________________________________________________________*/
-
-void initialize_pwm() {
-  // Backwards: DR1 false, DR2 true
-  // Forwards: DR1 true, DR2 false
-  bool dir = true;
-
-  pinMode(PWM1, OUTPUT);
-  pinMode(DR1, OUTPUT);
-  pinMode(NEN1, OUTPUT);
-
-  pinMode(PWM0, OUTPUT);
-  pinMode(DR0, OUTPUT);
-  pinMode(NEN0, OUTPUT);
-
-  digitalWrite(NEN1, 1);
-  digitalWrite(NEN0, 1);
-  digitalWrite(DR1, dir);
-  digitalWrite(DR0, !dir);
-
-
-  pwm.setClockDivider(1, false); //
-  pwm.timer(1, 1, 800, false); //timer x, prescaler, steps resolution
-  
-  pwm.setClockDivider(0, false); //
-  pwm.timer(0, 1, 800, false); //timer 
+ //  Serial.println(micros() - loopdiff);
 }
 
 /*_____________________________________________________ IMU _______________________________________________________________*/
@@ -438,7 +389,9 @@ void initialize_ypr() {
   mpu.setXGyroOffset(gyro_bias[0]);
   mpu.setYGyroOffset(gyro_bias[1]);
   mpu.setZGyroOffset(gyro_bias[2]);
-  mpu.setZAccelOffset(accel_z_bias);
+  mpu.setXAccelOffset(accel_bias[0]);
+  mpu.setYAccelOffset(accel_bias[1]);
+  mpu.setZAccelOffset(accel_bias[2]);
 
   if (devStatus == 0)
   {

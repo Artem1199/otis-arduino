@@ -1,0 +1,45 @@
+[package]
+name = "pid_control"
+authors = ["artem1199 <artkulak@gmail.com>"]
+edition = "2018"
+readme = "README.md"
+version = "0.1.0"
+
+[dependencies]
+cortex-m = "0.6.2"
+cortex-m-rt = "0.6.12"
+cortex-m-semihosting = "0.3.5"
+panic-halt = "0.2.0"
+alloc-cortex-m = { git = "https://github.com/rust-embedded/alloc-cortex-m" }
+embedded-hal = "0.2.3"
+libc = "0.2.68"
+#lpc82x-hal = "0.6"
+
+# Uncomment for the panic example.
+# panic-itm = "0.4.1"
+
+# Uncomment for the allocator example.
+# alloc-cortex-m = "0.3.5"
+
+# Uncomment for the device example.
+# Update `memory.x`, set target to `thumbv7em-none-eabihf` in `.cargo/config`,
+# and then use `cargo build --examples device` to build it.
+# [dependencies.stm32f3]
+# features = ["stm32f303", "rt"]
+# version = "0.7.1"
+
+[dependencies.num-traits]
+version = "0.2"
+default-features = false
+
+
+# this lets you use `cargo fix`!
+[lib]
+crate-type = ["staticlib"]
+
+
+
+[profile.release]
+codegen-units = 1 # better optimizations
+debug = true # symbols are nice and they don't increase the size on Flash
+lto = true # better optimizations
