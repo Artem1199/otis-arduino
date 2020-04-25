@@ -73,7 +73,7 @@ uint8_t dutyCycle1 = 0;
 
 
 /* PID properties */
-double originalSetpoint = -0.177;  //**
+double originalSetpoint = -0.0968;  //**
 double setpoint = originalSetpoint;
 double movingAngleOffset = 0.1;
 double input, output;
@@ -84,9 +84,9 @@ double errSum, lastTime, lastInput= 0, outputSum = 0;
 //double Kit = 100;
 //double Kdt = 7;
 
-double Kpt = 2000;
-double Kit = 1200;
-double Kdt = 35;
+double Kpt = 800;
+double Kit = 24000;
+double Kdt = 20;
 
 
 double setpointy = 100.0;
