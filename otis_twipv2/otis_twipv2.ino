@@ -64,15 +64,16 @@ void dmpDataReady() {
 
 /* Setting Motor Shield properties */
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-Adafruit_DCMotor *myMotor1 = AFMS.getMotor(1);
-Adafruit_DCMotor *myMotor2 = AFMS.getMotor(2);
-uint8_t dutyCycle0 = 200;
-uint8_t dutyCycle1 = 200;
+
+Adafruit_DCMotor *myMotor1 = AFMS.getMotor(1);   // Boost/Buck converter side motor
+Adafruit_DCMotor *myMotor2 = AFMS.getMotor(2);   // Adafruit shield side motor
+uint8_t dutyCycle0 = 0;
+uint8_t dutyCycle1 = 0;
 
 
 
 /* PID properties */
-double originalSetpoint = -0.21;
+double originalSetpoint = -0.177;  //**
 double setpoint = originalSetpoint;
 double movingAngleOffset = 0.1;
 double input, output;
@@ -83,9 +84,9 @@ double errSum, lastTime, lastInput= 0, outputSum = 0;
 //double Kit = 100;
 //double Kdt = 7;
 
-double Kpt = 80;
-double Kit = 91;
-double Kdt = 0;
+double Kpt = 2000;
+double Kit = 1200;
+double Kdt = 35;
 
 
 double setpointy = 100.0;
@@ -166,7 +167,7 @@ void setup() {
   //}
   delay(1000);
   
-  AFMS.begin();
+  AFMS.begin(30000);
   pinMode(LED_BUILTIN, OUTPUT);
   /* Setup the I2C bus */
 
@@ -203,6 +204,8 @@ void setup() {
      break;}
      delay(10);
      }*/
+
+
 
   WiFiDrv::digitalWrite(27, LOW); // for full brightness
   WiFiDrv::digitalWrite(25, HIGH); // for full brightness
@@ -294,10 +297,12 @@ void loop() {
   Serial.print(lastInput);
 #endif
 
-  unsigned long now = millis();
+ // unsigned long now = millis();
+ Serial.print(setpoint);
+ Serial.print(" ");
   
-  compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, now, &lastTime, 10, &lastInput, &outputSum);
-  compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
+  compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, millis(), &lastTime, 5, &lastInput, &outputSum);
+ // compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
 
   uint16_t send_p = ((ypr[1] + 3.14)*10436);
   uint16_t send_y = ((ypr[1] + 3.14)*10436);
@@ -329,13 +334,15 @@ void loop() {
   Serial.println(out1);
 #endif
 
+   int outputx = fabs(output);
 
   Serial.print(" ");
-  Serial.print(out0);
-  Serial.print(" ");
-  Serial.println(out1);
+ Serial.println(input,4);
+ Serial.print(" ");
+ Serial.println(outputx);
 
-  if (out0 < 0.0) {
+
+ /* if (out0 > 0.0) {
      myMotor1->run(BACKWARD);
   } else {
     myMotor1->run(FORWARD);
@@ -344,18 +351,27 @@ void loop() {
      myMotor2->run(FORWARD);
   } else {
     myMotor2->run(BACKWARD);
+  }*/
+
+  if (output > 0.0) {
+     myMotor1->run(BACKWARD);
+     myMotor2->run(BACKWARD);
+  } else {
+    myMotor1->run(FORWARD);
+    myMotor2->run(FORWARD);
   }
+  
 
 
-  double duty_mag0 = abs(255.0/50.0*min(50.0, abs(out0)));
-  double duty_mag1 = abs(255.0/50.0*min(50.0, abs(out1)));
-  dutyCycle0 = (uint8_t)duty_mag0;
-  dutyCycle1 = (uint8_t)duty_mag1;
+  //double duty_mag0 = abs(255.0/50.0*min(50.0, abs(out0)));
+  //double duty_mag1 = abs(255.0/50.0*min(50.0, abs(out1)));
+ // dutyCycle0 = (uint8_t)duty_mag0;
+  //dutyCycle1 = (uint8_t)duty_mag1;
 
 
-  if (fabs(input) < 0.6) {
-    myMotor1->setSpeed(dutyCycle0);
-    myMotor2->setSpeed(dutyCycle1);
+  if (fabs(input) < 0.5) {
+    myMotor1->setSpeed(outputx);
+    myMotor2->setSpeed(outputx);
 
   } else {
   myMotor1->setSpeed(0);
@@ -382,7 +398,7 @@ void initialize_ypr() {
   /* Initialize the DMP */
   Serial.println(F("Initializing DMP..."));
   devStatus = mpu.dmpInitialize();
-  mpu.setRate(9); //Set sampling rate to 1000/(1+9)
+  mpu.setRate(5); //Set sampling rate to 1000/(1+9)
   //uint8_t a = 1;
   //mpu.dmpSetFIFORate(a);
   /* Set the device biases appropiately */

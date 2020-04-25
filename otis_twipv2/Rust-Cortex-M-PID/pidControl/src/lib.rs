@@ -147,12 +147,22 @@ pub extern "C" fn compute_pid(Input: f64, Output: &mut f64, Setpoint: f64, Kp: f
 
         *outputSum += Ki * error * SampleTime/1000.0;
 
+      //P_ON_M
+        *outputSum -= Kp * dInput;
+
         if *outputSum > 255.0 
             {*outputSum = 255.0;}
         else if *outputSum < -255.0
             {*outputSum = -255.0;}
-        //*Output = Kp * error + *outputSum - Kd * dInput * 1000.0/SampleTime;
-        *Output = Kp * error + Ki * error * SampleTime/1000.0 - Kd * dInput * 1000.0/SampleTime;
+
+     //P_ON_E
+       // *Output = Kp * error;
+
+        //P_ON_M
+        *Output = 0.0;
+        *Output += *outputSum - Kd * dInput * 1000.0/SampleTime;
+
+       // *Output += Kp * error + Ki * error * SampleTime/1000.0 - Kd * dInput * 1000.0/SampleTime;
 
         if *Output > 255.0 {*Output = 255.0;}
             else if *Output < -255.0 {*Output = -255.0;}
