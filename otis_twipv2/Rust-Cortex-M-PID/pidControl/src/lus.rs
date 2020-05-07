@@ -419,22 +419,27 @@ impl Sys for Compute_calc {
     let svar_dInput = (svar_Input - self.svar_Input) ;
     let svar_error = wraptopi_r(svar_Setpoint - svar_Input) ;
     // let svar_abs_0 = (self.svar_outputSum + (((svar_Ki * svar_error) * svar_SampleTime) / 1000f64)) ;  Original before correction to PID
+    let svar_abs_0 = (self.svar_outputSum + (((svar_Ki * svar_error) * svar_SampleTime) / 1000f64)  - (svar_Kp * svar_dInput)) ;
 
-    let svar_abs_0 = (self.svar_outputSum + (((svar_Ki * svar_error) * svar_SampleTime) / 1000f64)  - (svar_Kd * svar_dInput)) ;
-
-    let svar_abs_2 = (((svar_Kp * svar_error) + (((svar_Ki * svar_error) * svar_SampleTime) / 1000f64)) - (((svar_Kd * svar_dInput) * 1000f64) / svar_SampleTime)) ;
     /*let limit_1 = */self.limit_1.next( (
       svar_abs_0,
     ) )  ;
+
     let (
       svar_abs_1,
     ) = self.limit_1.output() ;
+
+
+    // let svar_abs_2 = (((svar_Kp * svar_error) + (((svar_Ki * svar_error) * svar_SampleTime) / 1000f64)) - (((svar_Kd * svar_dInput) * 1000f64) / svar_SampleTime)) ;
+    let svar_abs_2 = (svar_abs_1 - (((svar_Kd * svar_dInput) * 1000f64) / svar_SampleTime)) ;
+    
     /*let limit_0 = */self.limit_0.next( (
       svar_abs_2,
     ) )  ;
     let (
       svar_abs_3,
     ) = self.limit_0.output() ;
+    
     let svar_Output = svar_abs_3 ;
     let svar_outputSum = svar_abs_1 ;
     

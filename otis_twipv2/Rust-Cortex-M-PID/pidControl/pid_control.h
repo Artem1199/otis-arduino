@@ -201,9 +201,23 @@ void create_PIDC(PIDC *raw_ptr, double kp, double ki, double kd, double SampleTi
 
 void drop_PIDC(PIDC *x);
 
-void init_PIDC_lus(Compute *raw_ptr, double inputArray[7]);
+void init_PIDC_lus(Compute *raw_ptr,
+                   double input,
+                   double now,
+                   double setpoint,
+                   double Kp,
+                   double Ki,
+                   double Kd,
+                   double sampleTime);
 
-double next_PIDC_lus(Compute *raw_ptr, double inputArray[7]);
+double next_PIDC_lus(Compute *raw_ptr,
+                     double input,
+                     double now,
+                     double setpoint,
+                     double Kp,
+                     double Ki,
+                     double Kd,
+                     double sampleTime);
 
 double wraptopi_r(double x);
 

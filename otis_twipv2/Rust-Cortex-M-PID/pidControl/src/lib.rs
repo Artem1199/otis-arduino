@@ -62,24 +62,31 @@ pub extern "C" fn compute_PIDC(raw_ptr: *mut pid1::PIDC, Input: f64, now: f64) -
 
 // # Kind2 Generated Lustre Shim Functions #
 #[no_mangle]
-pub extern "C" fn init_PIDC_lus(raw_ptr: *mut lus::Compute, inputArray: [f64; 7]) {
+pub extern "C" fn init_PIDC_lus(raw_ptr: *mut lus::Compute, input: f64, now: f64, setpoint: f64, Kp: f64, Ki: f64, Kd: f64, sampleTime:f64) {
 
     let PIDC_ref = unsafe{
         assert!(!raw_ptr.is_null());
         &mut *raw_ptr  // * derefs the pointer and returns a mutable reference to our data location
     };
 
+    let inputArray: [f64; 7] = [input, now, setpoint, Kp, Ki, Kd, sampleTime];
+
     *PIDC_ref = lus::Compute::read_init(inputArray)  // Place struct in deferenced location PIDC_ref
 
 }
 
 #[no_mangle]
-pub extern "C" fn next_PIDC_lus(raw_ptr: *mut lus::Compute, inputArray: [f64; 7]) -> f64 {
+pub extern "C" fn next_PIDC_lus(raw_ptr: *mut lus::Compute, input: f64, now: f64, setpoint: f64, Kp: f64, Ki: f64, Kd: f64, sampleTime:f64) -> f64 {
 
     let mut PIDC_ref = unsafe{
         assert!(!raw_ptr.is_null());
         &mut *raw_ptr
     };
+
+    //let mut inputArray: [f64;7] = [3.;7];
+    //inputArray[0] = 11.;
+
+    let inputArray: [f64; 7] = [input, now, setpoint, Kp, Ki, Kd, sampleTime];
 
     lus::Compute::read_next(PIDC_ref, inputArray)
    // lus::Compute::read_next(PIDC_ref, inputArray)
