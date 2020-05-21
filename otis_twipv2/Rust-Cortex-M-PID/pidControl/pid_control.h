@@ -3,19 +3,6 @@
 #include <cstdlib>
 #include <new>
 
-struct PIDC {
-  double kp;
-  double ki;
-  double kd;
-  double SampleTime;
-  double Output;
-  double Setpoint;
-  double errSum;
-  double lastInput;
-  double lastTime;
-  double outputSum;
-};
-
 /// Alias for `f64`.
 using Real = double;
 
@@ -181,7 +168,38 @@ struct Compute {
   Compute_calc Compute_calc_0;
 };
 
+struct PIDC {
+  double kp;
+  double ki;
+  double kd;
+  double SampleTime;
+  double Output;
+  double Setpoint;
+  double errSum;
+  double lastInput;
+  double lastTime;
+  double outputSum;
+};
+
 extern "C" {
+
+double ComputeLustreFUZ(Compute *raw_ptr,
+                        double input,
+                        double now,
+                        double setpoint,
+                        double Kp,
+                        double Ki,
+                        double Kd,
+                        double sampleTime);
+
+void InitLustreFUZ(Compute *raw_ptr,
+                   double input,
+                   double now,
+                   double setpoint,
+                   double Kp,
+                   double Ki,
+                   double Kd,
+                   double sampleTime);
 
 double compute_PIDC(PIDC *raw_ptr, double Input, double now);
 
@@ -200,24 +218,6 @@ void compute_pid(double Input,
 void create_PIDC(PIDC *raw_ptr, double kp, double ki, double kd, double SampleTime);
 
 void drop_PIDC(PIDC *x);
-
-void init_PIDC_lus(Compute *raw_ptr,
-                   double input,
-                   double now,
-                   double setpoint,
-                   double Kp,
-                   double Ki,
-                   double Kd,
-                   double sampleTime);
-
-double next_PIDC_lus(Compute *raw_ptr,
-                     double input,
-                     double now,
-                     double setpoint,
-                     double Kp,
-                     double Ki,
-                     double Kd,
-                     double sampleTime);
 
 double wraptopi_r(double x);
 

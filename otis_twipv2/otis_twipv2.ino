@@ -9,7 +9,7 @@
 #include "Secrets.h"
                                  
 #include <SPI.h>
-#include <WiFiNINA.h>
+#include <WiFiNINA.h>  
 #include <WiFiUdp.h>
 #include <utility/wifi_drv.h>
 
@@ -46,6 +46,8 @@ uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
 uint16_t fifoCount;     // count of all bytes currently in FIFO
 uint8_t fifoBuffer[64]; // FIFO storage buffer
 
+
+
 uint8_t prevDuty = 0;
 
 /* Processing variables */
@@ -73,20 +75,20 @@ uint8_t dutyCycle1 = 0;
 
 
 /* PID properties */
-double originalSetpoint = -0.0968;  //**
+double originalSetpoint = -0.0968;  //**0.0968
 double setpoint = originalSetpoint;
 double movingAngleOffset = 0.1;
 double input, output;
-double input_old, output_old;
 double errSum, lastTime, lastInput= 0, outputSum = 0;
+uint8_t sampleRate = 5;
 
-//double Kpt = 90;
-//double Kit = 100;
-//double Kdt = 7;
 
-double Kpt = 800;
-double Kit = 24000;
-double Kdt = 20;
+double Kpt = 1400;
+double Kit = 27000; 
+double Kdt = -20;
+
+double Kpf = 8;
+double Kdf = -.025;
 
 
 double setpointy = 100.0;
@@ -98,13 +100,16 @@ double Kiy = 40;
 double Kdy = 0;
 
 double errSumy, lastTimey, lastInputy = 0, outputSumy = 0;
-//PID pidTilt(&input, &output_old, &setpoint, Kpt, Kit, Kdt, DIRECT);
-//PID pidYaw(&inputy, &outputy_old, &setpointy, Kpy, Kiy, Kdy, DIRECT);
 
 float curr =  0x7FFFFFFF;
 float prev =  0x7FFFFFFF;
 float diff = 0.0;
 
+/* Init PID controller */
+Compute *pid_ptr = new Compute;
+// Compute *pid_ptry = new Compute;
+
+// PIDC *PIDC_ptr = new PIDC;
 
 /* Motor output */
 double out0, out1;
@@ -138,12 +143,10 @@ enum Protocol {
   WiFiClient client;
   size_t len;
 */
+
 uint16_t tiltNumber, yawNumber;
 
-//BluetoothSerial SerialBT;
-
 unsigned long postDelay = millis();
-
 
 /*_____________________________________________________ SETUP _______________________________________________________________*/
 
@@ -153,7 +156,9 @@ void setup() {
   WiFiDrv::pinMode(27, OUTPUT); //BLUE
   WiFiDrv::digitalWrite(26, HIGH); // for full brightness
 
+ 
 
+  //create_PIDC(PIDC_ptr,Kpt, Kit, Kdt, sampleRate);
 
   digitalWrite(12, LOW);
   digitalWrite(13, LOW);
@@ -210,6 +215,8 @@ void setup() {
   WiFiDrv::digitalWrite(27, LOW); // for full brightness
   WiFiDrv::digitalWrite(25, HIGH); // for full brightness
 
+  InitLustreFUZ(pid_ptr,0,millis(),setpoint,Kpf,Kit,Kdf,sampleRate);
+
 }
 
 unsigned long hold = millis();
@@ -229,7 +236,6 @@ bool client_avi = false;
 //unsigned long loopdiff;
 
 void loop() {
-
   
  // loopdiff = micros();
   fetch_ypr();
@@ -239,11 +245,6 @@ void loop() {
     }
   input = ypr[1];
   inputy = ypr[0];
-  
-  //Serial.print("Eqv Values:");
-  //Serial.print(send_p);
- // Serial.print(" ");
- // Serial.println(ypr[1]);
 
 
 
@@ -251,7 +252,8 @@ void loop() {
     setpointy = ypr[0];
   }
 
-  if (Serial.available() > 0)
+
+ /* if (Serial.available() > 0)
   {
     Serial.setTimeout(90);
     serBuff = Serial.readString();
@@ -291,18 +293,24 @@ void loop() {
       Serial.print(" D:");
       //      Serial.println(pidTilt.GetKd());
     }
-  }
+  }*/
+
 #ifdef DEBUG
   Serial.print(" lI: ");
   Serial.print(lastInput);
 #endif
 
- // unsigned long now = millis();
- Serial.print(setpoint);
- Serial.print(" ");
-  
-  compute_pid(input, &output, setpoint, Kpt, Kit, Kdt, millis(), &lastTime, 5, &lastInput, &outputSum);
- // compute_pid(inputy, &outputy, setpointy, Kpy, Kiy, Kdy, now, &lastTimey, 10, &lastInputy, &outputSumy);
+    
+      output = ComputeLustreFUZ(pid_ptr, input,millis(),setpoint,Kpf,Kit,Kdf,sampleRate) * 230.0;
+    Serial.print("o: ");
+    Serial.print(output);
+     // outputy = ComputeLustrePID(pid_ptry, input,millis(),setpoint,Kpy,Kiy,Kdy,sampleRate);
+
+     Serial.print(" e: ");
+     Serial.println(setpoint - input, 4);
+
+     //output = compute_PIDC(PIDC_ptr, input, millis());
+      
 
   uint16_t send_p = ((ypr[1] + 3.14)*10436);
   uint16_t send_y = ((ypr[1] + 3.14)*10436);
@@ -310,8 +318,7 @@ void loop() {
   uint16_t send_g = (outputy+1000) * 33;
   
   uint8_t sendarray[]= {send_p & 0xff, send_p >> 8, send_y & 0xff, send_y >> 8,send_o & 0xff, send_o >> 8,send_g & 0xff, send_g >> 8, };
-  
-  
+
 #ifdef DEBUG
   Serial.print(" input: ");
   Serial.print(input);
@@ -333,13 +340,6 @@ void loop() {
   Serial.print(" o1: ");
   Serial.println(out1);
 #endif
-
-   int outputx = fabs(output);
-
-  Serial.print(" ");
- Serial.println(input,4);
- Serial.print(" ");
- Serial.println(outputx);
 
 
  /* if (out0 > 0.0) {
@@ -368,10 +368,9 @@ void loop() {
  // dutyCycle0 = (uint8_t)duty_mag0;
   //dutyCycle1 = (uint8_t)duty_mag1;
 
-
   if (fabs(input) < 0.5) {
-    myMotor1->setSpeed(outputx);
-    myMotor2->setSpeed(outputx);
+    myMotor1->setSpeed(round(fabs(output)));
+    myMotor2->setSpeed(round(fabs(output)));
 
   } else {
   myMotor1->setSpeed(0);
@@ -398,7 +397,7 @@ void initialize_ypr() {
   /* Initialize the DMP */
   Serial.println(F("Initializing DMP..."));
   devStatus = mpu.dmpInitialize();
-  mpu.setRate(5); //Set sampling rate to 1000/(1+9)
+  mpu.setRate(sampleRate); //Set sampling rate to 1000/(1+9)
   //uint8_t a = 1;
   //mpu.dmpSetFIFORate(a);
   /* Set the device biases appropiately */

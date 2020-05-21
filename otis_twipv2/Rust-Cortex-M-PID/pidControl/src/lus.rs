@@ -770,17 +770,16 @@ pub mod helpers {
     /// Initial state of the system.
     fn init(input: Self::Input) -> Self ;
     /// Computes the next step.
-    fn next(&mut self, input: Self::Input);
+    fn next(&mut self, input: Self::Input) ;
 
-    fn read_init(array: Self::Array) -> Self{
-      let inputs = Self::input_of(array);
-      Self::init(inputs)
+    fn read_init(input: Self::Input) -> Self{
+     // let inputs = Self::input_of(array);
+      Self::init(input)
     }
 
-    fn read_next(&mut self, array: Self::Array) -> f64{
-      let inputs = Self::input_of(array);
-      self.next(inputs);
-      self.output_flt()
+    fn read_next(&mut self, input: Self::Input){
+     // let inputs = Self::input_of(array);
+      self.next(input);
     }
     fn output_flt(& self) -> Real;
     // Reads inputs from standard input, computes initial state, prints output.
