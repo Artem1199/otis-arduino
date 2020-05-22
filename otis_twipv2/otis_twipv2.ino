@@ -3,10 +3,9 @@
    @author EThan Lew
 */
 
-
+#include "Secrets.h"
 #include <Wire.h>
 #include "I2Cdev.h"
-#include "Secrets.h"
                                  
 #include <SPI.h>
 #include <WiFiNINA.h>  
@@ -19,17 +18,19 @@
 #include "Adafruit_MotorShield.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 
-
-//#define DEBUG 
+//const char* ssid = "otis";
+//const char* pass = "otis-arduino";
+#define WIFI
 /* MACROS */
 #define SERIAL_BAUD 115200
 #define I2C_FAST_MODE 400000
 #define MPU_INT 0
 #define HOST "192.168.50.158"
 
-
+#ifdef WIFI
 WiFiServer server(80);
-
+WiFiClient client;
+#endif
 
 /* System Tuning */
 uint16_t gyro_bias[] = {30, -10, 62};
@@ -66,40 +67,36 @@ void dmpDataReady() {
 
 /* Setting Motor Shield properties */
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-
 Adafruit_DCMotor *myMotor1 = AFMS.getMotor(1);   // Boost/Buck converter side motor
 Adafruit_DCMotor *myMotor2 = AFMS.getMotor(2);   // Adafruit shield side motor
 uint8_t dutyCycle0 = 0;
 uint8_t dutyCycle1 = 0;
 
-
-
 /* PID properties */
-double originalSetpoint = -0.0968;  //**0.0968
+double originalSetpoint = -0.0829;  //positve = falls toward fuzes
 double setpoint = originalSetpoint;
 double movingAngleOffset = 0.1;
 double input, output;
 double errSum, lastTime, lastInput= 0, outputSum = 0;
+
 uint8_t sampleRate = 5;
 
-
 double Kpt = 1400;
-double Kit = 27000; 
+double Kit = 24000; 
 double Kdt = -20;
-
-double Kpf = 8;
-double Kdf = -.025;
-
-
-double setpointy = 100.0;
-double inputy, outputy;
-double inputy_old, outputy_old;
 
 double Kpy = 50;
 double Kiy = 40;
 double Kdy = 0;
 
-double errSumy, lastTimey, lastInputy = 0, outputSumy = 0;
+double Kpf = 6; //fuzzy logic constants
+double Kif = 30;
+double Kdf = -.03;
+
+
+double setpointy = 100.0;
+double inputy, outputy;
+
 
 float curr =  0x7FFFFFFF;
 float prev =  0x7FFFFFFF;
@@ -107,9 +104,7 @@ float diff = 0.0;
 
 /* Init PID controller */
 Compute *pid_ptr = new Compute;
-// Compute *pid_ptry = new Compute;
-
-// PIDC *PIDC_ptr = new PIDC;
+//Compute *pid_ptry = new Compute;
 
 /* Motor output */
 double out0, out1;
@@ -121,28 +116,17 @@ const uint16_t* remote_16 = (const uint16_t*)remote_buff;
 String serBuff = "";
 
 /* Websockets Control */
-//#define SSID "OTIS-bot"
-//#define PASSWORD "japery2019"
 #define SERVER_PORT 4141
 #define PACKET_SIZE 4
 #define IS_SERVER
 
-
-
 int status = WL_IDLE_STATUS; 
 
-WiFiClient client;
+
 enum Protocol {
   TILT_SET,
   YAW_SET
 };
-
-/*
-  
-  Server server(SERVER_PORT);
-  WiFiClient client;
-  size_t len;
-*/
 
 uint16_t tiltNumber, yawNumber;
 
@@ -156,49 +140,36 @@ void setup() {
   WiFiDrv::pinMode(27, OUTPUT); //BLUE
   WiFiDrv::digitalWrite(26, HIGH); // for full brightness
 
- 
-
-  //create_PIDC(PIDC_ptr,Kpt, Kit, Kdt, sampleRate);
-
   digitalWrite(12, LOW);
   digitalWrite(13, LOW);
 
   /* Create Bluetooth Serial */
   //SerialBT.begin("OTIS-BOT");
+  
   /* Set the serial baud rate*/
   Serial.begin(SERIAL_BAUD);
   //while (!Serial) {
-  //  ; // wait for serial port to connect. Needed for native USB port only
+   // ; // wait for serial port to connect. Needed for native USB port only
   //}
-  delay(1000);
   
   AFMS.begin(30000);
   pinMode(LED_BUILTIN, OUTPUT);
+  
   /* Setup the I2C bus */
+  Wire.begin();
+  Wire.setClock(400000);
 
- Wire.begin();
- Wire.setClock(400000);
- 
-  /* Setup wifi */
-  //initialize_wifi();
-  server.begin();
   WiFiDrv::digitalWrite(26, LOW); // for full brightness
   WiFiDrv::digitalWrite(27, HIGH); // for full brightness
-  /* Setup the IMU and relevant buffers */
-  initialize_ypr();
-  
 
+#ifdef WIFI
+  /* Setup wifi */
+  initialize_wifi();
+
+  /* Setup communication w/ otis-TCP rust program */
+  server.begin();
   client.stop();
-
-
- /* init PID values */
-  lastTime = millis() - 10;
-  lastTimey = millis() - 10;
-  fetch_ypr();
-  input = ypr[1];
-  inputy = ypr[0];
-
- /* while(!client){
+  while(!client){
      client = server.available();
      if (client.connected()) {
       while (client.available()){
@@ -208,44 +179,53 @@ void setup() {
            //client.println("hello"); 
      break;}
      delay(10);
-     }*/
-
+   }
+#endif
 
 
   WiFiDrv::digitalWrite(27, LOW); // for full brightness
   WiFiDrv::digitalWrite(25, HIGH); // for full brightness
 
-  InitLustreFUZ(pid_ptr,0,millis(),setpoint,Kpf,Kit,Kdf,sampleRate);
-
-}
-
-unsigned long hold = millis();
-int count = 0;
-int countmax = 0;
-
-unsigned long evalDelay = millis();
-unsigned long timediff = 0;
-unsigned long sendcounter = 0;
-unsigned long notcounter = 0;
-bool client_avi = false;
-
-/*_____________________________________________________ LOOP _______________________________________________________________*/
 
 
-
-//unsigned long loopdiff;
-
-void loop() {
+  /* Setup the IMU and relevant buffers */
+  initialize_ypr();
   
- // loopdiff = micros();
+ /* init PID values */
   fetch_ypr();
-  
-    if (input != ypr[1]){
-      WiFiDrv::digitalWrite(25, HIGH);
-    }
   input = ypr[1];
   inputy = ypr[0];
 
+  InitLustreFUZ(pid_ptr,0,millis(),setpoint,Kpf,Kif,Kdf,sampleRate);
+
+}
+/*_____________________________________________________ LOOP _______________________________________________________________*/
+
+uint8_t error_cnt = 99;
+
+void loop() {
+  
+  fetch_ypr();
+  
+/* detect is MPU is no longer providing safe data */  
+    if (input != ypr[1]){
+      WiFiDrv::digitalWrite(25, HIGH);
+       } else {
+        error_cnt--;
+          if (error_cnt == 0){
+          WiFiDrv::digitalWrite(25, LOW);
+            myMotor1->setSpeed(0);
+            myMotor2->setSpeed(0);
+          while(1){
+            WiFiDrv::digitalWrite(26, HIGH);
+            delay(2000);
+            WiFiDrv::digitalWrite(26, LOW);
+            delay(2000);}
+          } 
+       }
+
+  input = ypr[1];
+  inputy = ypr[0];
 
 
   if (setpointy > 4.0) {
@@ -295,51 +275,11 @@ void loop() {
     }
   }*/
 
-#ifdef DEBUG
-  Serial.print(" lI: ");
-  Serial.print(lastInput);
-#endif
-
     
-      output = ComputeLustreFUZ(pid_ptr, input,millis(),setpoint,Kpf,Kit,Kdf,sampleRate) * 230.0;
-    Serial.print("o: ");
-    Serial.print(output);
-     // outputy = ComputeLustrePID(pid_ptry, input,millis(),setpoint,Kpy,Kiy,Kdy,sampleRate);
-
-     Serial.print(" e: ");
-     Serial.println(setpoint - input, 4);
-
-     //output = compute_PIDC(PIDC_ptr, input, millis());
-      
-
-  uint16_t send_p = ((ypr[1] + 3.14)*10436);
-  uint16_t send_y = ((ypr[1] + 3.14)*10436);
-  uint16_t send_o = (output+1000) * 33;
-  uint16_t send_g = (outputy+1000) * 33;
-  
-  uint8_t sendarray[]= {send_p & 0xff, send_p >> 8, send_y & 0xff, send_y >> 8,send_o & 0xff, send_o >> 8,send_g & 0xff, send_g >> 8, };
-
-#ifdef DEBUG
-  Serial.print(" input: ");
-  Serial.print(input);
-  Serial.print(" lT: ");
-  Serial.print(lastTime);
-  Serial.print(" oS: ");
-  Serial.print(outputSum);
-  Serial.print(" O: ");
-  Serial.print(output);
-#endif
+  output = ComputeLustreFUZ(pid_ptr, input, millis(),setpoint,Kpf,Kif,Kdf,sampleRate) * 230.0;
 
   out0 = output - outputy;
   out1 = output + outputy;
-
-
-#ifdef DEBUG
-  Serial.print(" o0: ");
-  Serial.print(out0);
-  Serial.print(" o1: ");
-  Serial.println(out1);
-#endif
 
 
  /* if (out0 > 0.0) {
@@ -376,15 +316,13 @@ void loop() {
   myMotor1->setSpeed(0);
   myMotor2->setSpeed(0);
   }
-  
-  if (millis() - postDelay > 10){
-          client.write(sendarray, 8);
-          postDelay = millis();        
-  }
+
+#ifdef WIFI
+  wifi_communication(ypr[1] - setpoint, ypr[0] - setpointy, output, outputy);
+#endif
 
     WiFiDrv::digitalWrite(25, LOW);
 
- //  Serial.println(micros() - loopdiff);
 }
 
 /*_____________________________________________________ IMU _______________________________________________________________*/
@@ -508,8 +446,6 @@ void initialize_wifi(){
   return;
 }
 
-/*_____________________________________________________ WiFi _______________________________________________________________*/
-
 void printWiFiStatus() {
   // print the SSID of the network you're attached to:
   Serial.print("SSID: ");
@@ -526,3 +462,21 @@ void printWiFiStatus() {
   Serial.print(rssi);
   Serial.println(" dBm");
 }
+
+void wifi_communication(double pitch_err, double yaw_err, double output, double outputy) {
+  
+  #ifdef WIFI
+   uint16_t send_p = ((pitch_err + 3.14)*10436);
+   uint16_t send_y = ((yaw_err + 3.14)*10436);
+   uint16_t send_o = (output+1000) * 33;
+   uint16_t send_g = (outputy+1000) * 33;
+  
+    uint8_t sendarray[]= {send_p & 0xff, send_p >> 8, send_y & 0xff, send_y >> 8,send_o & 0xff, send_o >> 8,send_g & 0xff, send_g >> 8, };
+  #endif
+
+    if (millis() - postDelay > 10){
+        client.write(sendarray, 8);
+        postDelay = millis();        
+  }
+
+};

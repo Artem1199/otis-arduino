@@ -29,6 +29,7 @@ fn main() {
 /// | `Input` | Real |
 /// | `Now` | Real |
 /// | `Kp` | Real |
+/// | `Ki` | Real |
 /// | `Kd` | Real |
 /// | `Setpoint` | Real |
 /// | `SampleTime` | Real |
@@ -43,7 +44,8 @@ fn main() {
 ///
 /// | Lustre identifier | Struct | Inputs | Outputs | Position |
 /// |:---:|:---:|:---:|:---:|:---:|
-/// | `kmlogic` | [Kmlogic](struct.Kmlogic.html) | `error`, `dInput` | `abs_0` | [fuzzy.lus line 13](../src/lus/fuzzy.lus.html#13) |
+/// | `kmlogic` | [Kmlogic](struct.Kmlogic.html) | `error`, `dInput` | `abs_2` | [fuzzy.lus line 15](../src/lus/fuzzy.lus.html#15) |
+/// | `limit` | [Limit](struct.Limit.html) | `abs_0` | `abs_1` | [fuzzy.lus line 10](../src/lus/fuzzy.lus.html#10) |
 ///
 /// # Assertions
 ///
@@ -61,6 +63,8 @@ fn main() {
   pub svar_Now: Real,
   /// Input: `Compute.usr.Kp`
   pub svar_Kp: Real,
+  /// Input: `Compute.usr.Ki`
+  pub svar_Ki: Real,
   /// Input: `Compute.usr.Kd`
   pub svar_Kd: Real,
   /// Input: `Compute.usr.Setpoint`
@@ -71,14 +75,22 @@ fn main() {
   /// Output: `Compute.usr.Output`
   pub svar_Output: Real,
 
-  /// Local, call: `Compute.res.abs_0`
+  /// Local, call: `Compute.res.abs_2`
+  pub svar_abs_2: Real,
+  /// Local, alias(Compute.impl.usr.outputSum): `Compute.res.abs_1`
+  pub svar_abs_1: Real,
+  /// Local, invisible local: `Compute.res.abs_0`
   pub svar_abs_0: Real,
+  /// Local, local: `Compute.impl.usr.outputSum`
+  pub svar_outputSum: Real,
   /// Local, local: `Compute.impl.usr.error`
   pub svar_error: Real,
   /// Local, local: `Compute.impl.usr.dInput`
   pub svar_dInput: Real,
 
-  /// Call to `kmlogic` ([fuzzy.lus line 13](../src/lus/fuzzy.lus.html#13)).
+  /// Call to `limit` ([fuzzy.lus line 10](../src/lus/fuzzy.lus.html#10)).
+  pub limit_1: Limit,
+  /// Call to `kmlogic` ([fuzzy.lus line 15](../src/lus/fuzzy.lus.html#15)).
   pub kmlogic_0: Kmlogic,
 }
 
@@ -87,6 +99,7 @@ impl Sys for Compute {
     Real, // svar_Input (Compute.usr.Input)
     Real, // svar_Now (Compute.usr.Now)
     Real, // svar_Kp (Compute.usr.Kp)
+    Real, // svar_Ki (Compute.usr.Ki)
     Real, // svar_Kd (Compute.usr.Kd)
     Real, // svar_Setpoint (Compute.usr.Setpoint)
     Real, // svar_SampleTime (Compute.usr.SampleTime)
@@ -94,7 +107,7 @@ impl Sys for Compute {
   type Output = (
     Real, // svar_Output (Compute.usr.Output)
   ) ;
-/*  fn arity() -> usize { 6 }
+/*  fn arity() -> usize { 7 }
 *//*  fn input_of(vec: Vec<String>) -> Result<Self::Input, String> {
         match vec.len() {
           n if n == Self::arity() => {
@@ -104,7 +117,8 @@ impl Sys for Compute {
               try!( parse::real(& vec[2]) ), 
               try!( parse::real(& vec[3]) ), 
               try!( parse::real(& vec[4]) ), 
-              try!( parse::real(& vec[5]) ),
+              try!( parse::real(& vec[5]) ), 
+              try!( parse::real(& vec[6]) ),
             ) 
           },
           n => Err(
@@ -122,22 +136,32 @@ impl Sys for Compute {
     let svar_Input = input.0 ;
     let svar_Now = input.1 ;
     let svar_Kp = input.2 ;
-    let svar_Kd = input.3 ;
-    let svar_Setpoint = input.4 ;
-    let svar_SampleTime = input.5 ;
+    let svar_Ki = input.3 ;
+    let svar_Kd = input.4 ;
+    let svar_Setpoint = input.5 ;
+    let svar_SampleTime = input.6 ;
     
     // |===| Computing initial state.
     let svar_error = ((svar_Setpoint - svar_Input) * svar_Kp) ;
     let svar_dInput = ((((svar_Input - 0f64) * 1000f64) / svar_SampleTime) * svar_Kd) ;
+    let svar_abs_0 = 0f64 ;
+    let limit_1 = Limit::init( (
+      svar_abs_0,
+    ) ) ;
+    let (
+      svar_abs_1,
+    ) = limit_1.output() ;
+    
     let kmlogic_0 = Kmlogic::init( (
       svar_error,
       svar_dInput,
     ) ) ;
     let (
-      svar_abs_0,
+      svar_abs_2,
     ) = kmlogic_0.output() ;
     
-    let svar_Output = ( if ((svar_Now - 0f64) >= svar_SampleTime) { svar_abs_0 } else {0f64 } ) ;
+    let svar_outputSum = svar_abs_1 ;
+    let svar_Output = ( if ((svar_Now - 0f64) >= svar_SampleTime) { (svar_abs_2 + svar_outputSum) } else {0f64 } ) ;
     
     // |===| Checking assertions.
     
@@ -150,6 +174,7 @@ impl Sys for Compute {
       svar_Input: svar_Input,
       svar_Now: svar_Now,
       svar_Kp: svar_Kp,
+      svar_Ki: svar_Ki,
       svar_Kd: svar_Kd,
       svar_Setpoint: svar_Setpoint,
       svar_SampleTime: svar_SampleTime,
@@ -158,11 +183,15 @@ impl Sys for Compute {
       svar_Output: svar_Output,
       
       // |===| Locals.
+      svar_abs_2: svar_abs_2,
+      svar_abs_1: svar_abs_1,
       svar_abs_0: svar_abs_0,
+      svar_outputSum: svar_outputSum,
       svar_error: svar_error,
       svar_dInput: svar_dInput,
       
       // |===| Calls.
+      limit_1: limit_1,
       kmlogic_0: kmlogic_0,
     } 
   }
@@ -172,21 +201,30 @@ impl Sys for Compute {
     let svar_Input = input.0 ;
     let svar_Now = input.1 ;
     let svar_Kp = input.2 ;
-    let svar_Kd = input.3 ;
-    let svar_Setpoint = input.4 ;
-    let svar_SampleTime = input.5 ;
+    let svar_Ki = input.3 ;
+    let svar_Kd = input.4 ;
+    let svar_Setpoint = input.5 ;
+    let svar_SampleTime = input.6 ;
     
     // |===| Computing next state.
     let svar_error = ((svar_Setpoint - svar_Input) * svar_Kp) ;
     let svar_dInput = ((((svar_Input - self.svar_Input) * 1000f64) / svar_SampleTime) * svar_Kd) ;
+    let svar_abs_0 = (self.svar_outputSum + (((svar_Ki * svar_error) * svar_SampleTime) / 1000f64)) ;
+    /*let limit_1 = */ self.limit_1.next( (
+      svar_abs_0,
+    ) ) ;
+    let (
+      svar_abs_1,
+    ) = self.limit_1.output() ;
     /*let kmlogic_0 = */ self.kmlogic_0.next( (
       svar_error,
       svar_dInput,
     ) ) ;
     let (
-      svar_abs_0,
+      svar_abs_2,
     ) = self.kmlogic_0.output() ;
-    let svar_Output = ( if ((svar_Now - self.svar_Now) >= svar_SampleTime) { svar_abs_0 } else {self.svar_Output } ) ;
+    let svar_outputSum = svar_abs_1 ;
+    let svar_Output = ( if ((svar_Now - self.svar_Now) >= svar_SampleTime) { (svar_abs_2 + svar_outputSum) } else {self.svar_Output } ) ;
     
     // |===| Checking assertions.
     
@@ -199,6 +237,7 @@ impl Sys for Compute {
     self.svar_Input = svar_Input ;
     self.svar_Now = svar_Now ;
     self.svar_Kp = svar_Kp ;
+    self.svar_Ki = svar_Ki ;
     self.svar_Kd = svar_Kd ;
     self.svar_Setpoint = svar_Setpoint ;
     self.svar_SampleTime = svar_SampleTime ;
@@ -207,12 +246,16 @@ impl Sys for Compute {
     self.svar_Output = svar_Output ;
     
     // |===| Locals.
+    self.svar_abs_2 = svar_abs_2 ;
+    self.svar_abs_1 = svar_abs_1 ;
     self.svar_abs_0 = svar_abs_0 ;
+    self.svar_outputSum = svar_outputSum ;
     self.svar_error = svar_error ;
     self.svar_dInput = svar_dInput ;
     
     // |===| Calls.
-    /*self.kmlogic_0 = kmlogic_0 ;*/ 
+    /*self.limit_1 = limit_1 ;
+    self.kmlogic_0 = kmlogic_0 ;*/ 
     
     // |===| Return new state.
     /*Ok( self )*/
@@ -248,16 +291,16 @@ impl Sys for Compute {
 ///
 /// | Lustre identifier | Struct | Inputs | Outputs | Position |
 /// |:---:|:---:|:---:|:---:|:---:|
-/// | `dy2fuzzify` | [Dy2fuzzify](struct.Dy2fuzzify.html) | `dlo`, `dinput` | `abs_13` | [fuzzy.lus line 94](../src/lus/fuzzy.lus.html#94) |
-/// | `dy1fuzzify` | [Dy1fuzzify](struct.Dy1fuzzify.html) | `dlo`, `dinput` | `abs_12` | [fuzzy.lus line 93](../src/lus/fuzzy.lus.html#93) |
-/// | `y2fuzzify` | [Y2fuzzify](struct.Y2fuzzify.html) | `plo`, `pinput` | `abs_11` | [fuzzy.lus line 90](../src/lus/fuzzy.lus.html#90) |
-/// | `y1fuzzify` | [Y1fuzzify](struct.Y1fuzzify.html) | `plo`, `pinput` | `abs_10` | [fuzzy.lus line 89](../src/lus/fuzzy.lus.html#89) |
-/// | `rule_base` | [Rule_base](struct.Rule_base.html) | `abs_8` | `abs_9` | [fuzzy.lus line 86](../src/lus/fuzzy.lus.html#86) |
-/// | `rule_base` | [Rule_base](struct.Rule_base.html) | `abs_6` | `abs_7` | [fuzzy.lus line 85](../src/lus/fuzzy.lus.html#85) |
-/// | `rule_base` | [Rule_base](struct.Rule_base.html) | `abs_4` | `abs_5` | [fuzzy.lus line 82](../src/lus/fuzzy.lus.html#82) |
-/// | `rule_base` | [Rule_base](struct.Rule_base.html) | `abs_2` | `abs_3` | [fuzzy.lus line 81](../src/lus/fuzzy.lus.html#81) |
-/// | `findlocation_d` | [Findlocation_d](struct.Findlocation_d.html) | `dinput` | `abs_1` | [fuzzy.lus line 66](../src/lus/fuzzy.lus.html#66) |
-/// | `findlocation_p` | [Findlocation_p](struct.Findlocation_p.html) | `pinput` | `abs_0` | [fuzzy.lus line 65](../src/lus/fuzzy.lus.html#65) |
+/// | `dy2fuzzify` | [Dy2fuzzify](struct.Dy2fuzzify.html) | `dlo`, `dinput` | `abs_13` | [fuzzy.lus line 101](../src/lus/fuzzy.lus.html#101) |
+/// | `dy1fuzzify` | [Dy1fuzzify](struct.Dy1fuzzify.html) | `dlo`, `dinput` | `abs_12` | [fuzzy.lus line 100](../src/lus/fuzzy.lus.html#100) |
+/// | `y2fuzzify` | [Y2fuzzify](struct.Y2fuzzify.html) | `plo`, `pinput` | `abs_11` | [fuzzy.lus line 97](../src/lus/fuzzy.lus.html#97) |
+/// | `y1fuzzify` | [Y1fuzzify](struct.Y1fuzzify.html) | `plo`, `pinput` | `abs_10` | [fuzzy.lus line 96](../src/lus/fuzzy.lus.html#96) |
+/// | `rule_base` | [Rule_base](struct.Rule_base.html) | `abs_8` | `abs_9` | [fuzzy.lus line 93](../src/lus/fuzzy.lus.html#93) |
+/// | `rule_base` | [Rule_base](struct.Rule_base.html) | `abs_6` | `abs_7` | [fuzzy.lus line 92](../src/lus/fuzzy.lus.html#92) |
+/// | `rule_base` | [Rule_base](struct.Rule_base.html) | `abs_4` | `abs_5` | [fuzzy.lus line 89](../src/lus/fuzzy.lus.html#89) |
+/// | `rule_base` | [Rule_base](struct.Rule_base.html) | `abs_2` | `abs_3` | [fuzzy.lus line 88](../src/lus/fuzzy.lus.html#88) |
+/// | `findlocation_d` | [Findlocation_d](struct.Findlocation_d.html) | `dinput` | `abs_1` | [fuzzy.lus line 73](../src/lus/fuzzy.lus.html#73) |
+/// | `findlocation_p` | [Findlocation_p](struct.Findlocation_p.html) | `pinput` | `abs_0` | [fuzzy.lus line 72](../src/lus/fuzzy.lus.html#72) |
 ///
 /// # Assertions
 ///
@@ -336,25 +379,25 @@ impl Sys for Compute {
   /// Local, local: `kmlogic.impl.usr.plo`
   pub svar_plo: Int,
 
-  /// Call to `findlocation_p` ([fuzzy.lus line 65](../src/lus/fuzzy.lus.html#65)).
+  /// Call to `findlocation_p` ([fuzzy.lus line 72](../src/lus/fuzzy.lus.html#72)).
   pub findlocation_p_9: Findlocation_p,
-  /// Call to `findlocation_d` ([fuzzy.lus line 66](../src/lus/fuzzy.lus.html#66)).
+  /// Call to `findlocation_d` ([fuzzy.lus line 73](../src/lus/fuzzy.lus.html#73)).
   pub findlocation_d_8: Findlocation_d,
-  /// Call to `rule_base` ([fuzzy.lus line 81](../src/lus/fuzzy.lus.html#81)).
+  /// Call to `rule_base` ([fuzzy.lus line 88](../src/lus/fuzzy.lus.html#88)).
   pub rule_base_7: Rule_base,
-  /// Call to `rule_base` ([fuzzy.lus line 82](../src/lus/fuzzy.lus.html#82)).
+  /// Call to `rule_base` ([fuzzy.lus line 89](../src/lus/fuzzy.lus.html#89)).
   pub rule_base_6: Rule_base,
-  /// Call to `rule_base` ([fuzzy.lus line 85](../src/lus/fuzzy.lus.html#85)).
+  /// Call to `rule_base` ([fuzzy.lus line 92](../src/lus/fuzzy.lus.html#92)).
   pub rule_base_5: Rule_base,
-  /// Call to `rule_base` ([fuzzy.lus line 86](../src/lus/fuzzy.lus.html#86)).
+  /// Call to `rule_base` ([fuzzy.lus line 93](../src/lus/fuzzy.lus.html#93)).
   pub rule_base_4: Rule_base,
-  /// Call to `y1fuzzify` ([fuzzy.lus line 89](../src/lus/fuzzy.lus.html#89)).
+  /// Call to `y1fuzzify` ([fuzzy.lus line 96](../src/lus/fuzzy.lus.html#96)).
   pub y1fuzzify_3: Y1fuzzify,
-  /// Call to `y2fuzzify` ([fuzzy.lus line 90](../src/lus/fuzzy.lus.html#90)).
+  /// Call to `y2fuzzify` ([fuzzy.lus line 97](../src/lus/fuzzy.lus.html#97)).
   pub y2fuzzify_2: Y2fuzzify,
-  /// Call to `dy1fuzzify` ([fuzzy.lus line 93](../src/lus/fuzzy.lus.html#93)).
+  /// Call to `dy1fuzzify` ([fuzzy.lus line 100](../src/lus/fuzzy.lus.html#100)).
   pub dy1fuzzify_1: Dy1fuzzify,
-  /// Call to `dy2fuzzify` ([fuzzy.lus line 94](../src/lus/fuzzy.lus.html#94)).
+  /// Call to `dy2fuzzify` ([fuzzy.lus line 101](../src/lus/fuzzy.lus.html#101)).
   pub dy2fuzzify_0: Dy2fuzzify,
 }
 
@@ -708,6 +751,137 @@ impl Sys for Kmlogic {
     }*/
 }
 
+/// Stores the state for sub-node `limit`.
+///
+/// # Inputs
+///
+/// | Lustre identifier | Type |
+/// |:---:|:---|
+/// | `x` | Real |
+///
+/// # Outputs
+///
+/// | Lustre identifier | Type |
+/// |:---:|:---|
+/// | `y` | Real |
+///
+/// # Sub systems
+///
+/// No subsystems for this system.
+///
+/// # Assertions
+///
+/// /// No assertions for this system.
+///
+/// # Assumptions
+///
+/// No assumptions for this system.
+///
+#[repr(C)]
+  pub struct Limit {
+  /// Input: `limit.usr.x`
+  pub svar_x: Real,
+
+  /// Output: `limit.usr.y`
+  pub svar_y: Real,
+
+
+}
+
+impl Sys for Limit {
+  type Input = (
+    Real, // svar_x (limit.usr.x)
+  ) ;
+  type Output = (
+    Real, // svar_y (limit.usr.y)
+  ) ;
+/*  fn arity() -> usize { 1 }
+*//*  fn input_of(vec: Vec<String>) -> Result<Self::Input, String> {
+        match vec.len() {
+          n if n == Self::arity() => {
+            (
+              try!( parse::real(& vec[0]) ),
+            ) 
+          },
+          n => Err(
+            format!(
+              "arity mismatch, expected {} but got {}: {:?}",
+              Self::arity(), n, vec
+            )
+            
+          ),
+        }
+      }
+
+*/   fn init(input: Self::Input) -> Self {
+    // |===| Retrieving inputs.
+    let svar_x = input.0 ;
+    
+    // |===| Computing initial state.
+    let svar_y = ( if (svar_x > 1f64) { 1f64 } else {( if (svar_x < - 1f64) { - 1f64 } else {svar_x } ) } ) ;
+    
+    // |===| Checking assertions.
+    
+    
+    
+    
+    // |===| Returning initial state.
+    Limit {
+      // |===| Inputs.
+      svar_x: svar_x,
+      
+      // |===| Outputs.
+      svar_y: svar_y,
+      
+      // |===| Locals.
+      
+      
+      // |===| Calls.
+      
+    } 
+  }
+
+  fn next(&mut self, input: Self::Input) {
+    // |===| Retrieving inputs.
+    let svar_x = input.0 ;
+    
+    // |===| Computing next state.
+    let svar_y = ( if (svar_x > 1f64) { 1f64 } else {( if (svar_x < - 1f64) { - 1f64 } else {svar_x } ) } ) ;
+    
+    // |===| Checking assertions.
+    
+    
+    // |===| Checking assumptions.
+    
+    
+    // |===| Updating next state.
+    // |===| Inputs.
+    self.svar_x = svar_x ;
+    
+    // |===| Outputs.
+    self.svar_y = svar_y ;
+    
+    // |===| Locals.
+    
+    
+    // |===| Calls.
+    /**/ 
+    
+    // |===| Return new state.
+    /*Ok( self )*/
+  }
+
+  fn output(& self) -> Self::Output {(
+    self.svar_y,
+  )}
+/*  fn output_str(& self) -> String {
+      format!(
+        "{}",
+        self.svar_y
+      )
+    }*/
+}
+
 /// Stores the state for sub-node `dy2fuzzify`.
 ///
 /// # Inputs
@@ -727,12 +901,12 @@ impl Sys for Kmlogic {
 ///
 /// | Lustre identifier | Struct | Inputs | Outputs | Position |
 /// |:---:|:---:|:---:|:---:|:---:|
-/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_9`, `abs_11`, `input` | `abs_12` | [fuzzy.lus line 262](../src/lus/fuzzy.lus.html#262) |
-/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_7`, `abs_9`, `input` | `abs_10` | [fuzzy.lus line 261](../src/lus/fuzzy.lus.html#261) |
-/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_5`, `abs_7`, `input` | `abs_8` | [fuzzy.lus line 260](../src/lus/fuzzy.lus.html#260) |
-/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_3`, `abs_5`, `input` | `abs_6` | [fuzzy.lus line 259](../src/lus/fuzzy.lus.html#259) |
-/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_1`, `abs_3`, `input` | `abs_4` | [fuzzy.lus line 258](../src/lus/fuzzy.lus.html#258) |
-/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_0`, `abs_1`, `input` | `abs_2` | [fuzzy.lus line 257](../src/lus/fuzzy.lus.html#257) |
+/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_9`, `abs_11`, `input` | `abs_12` | [fuzzy.lus line 269](../src/lus/fuzzy.lus.html#269) |
+/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_7`, `abs_9`, `input` | `abs_10` | [fuzzy.lus line 268](../src/lus/fuzzy.lus.html#268) |
+/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_5`, `abs_7`, `input` | `abs_8` | [fuzzy.lus line 267](../src/lus/fuzzy.lus.html#267) |
+/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_3`, `abs_5`, `input` | `abs_6` | [fuzzy.lus line 266](../src/lus/fuzzy.lus.html#266) |
+/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_1`, `abs_3`, `input` | `abs_4` | [fuzzy.lus line 265](../src/lus/fuzzy.lus.html#265) |
+/// | `dy2calc` | [Dy2calc](struct.Dy2calc.html) | `abs_0`, `abs_1`, `input` | `abs_2` | [fuzzy.lus line 264](../src/lus/fuzzy.lus.html#264) |
 ///
 /// # Assertions
 ///
@@ -779,17 +953,17 @@ impl Sys for Kmlogic {
   /// Local, invisible local: `dy2fuzzify.res.abs_0`
   pub svar_abs_0: Real,
 
-  /// Call to `dy2calc` ([fuzzy.lus line 257](../src/lus/fuzzy.lus.html#257)).
+  /// Call to `dy2calc` ([fuzzy.lus line 264](../src/lus/fuzzy.lus.html#264)).
   pub dy2calc_5: Dy2calc,
-  /// Call to `dy2calc` ([fuzzy.lus line 258](../src/lus/fuzzy.lus.html#258)).
+  /// Call to `dy2calc` ([fuzzy.lus line 265](../src/lus/fuzzy.lus.html#265)).
   pub dy2calc_4: Dy2calc,
-  /// Call to `dy2calc` ([fuzzy.lus line 259](../src/lus/fuzzy.lus.html#259)).
+  /// Call to `dy2calc` ([fuzzy.lus line 266](../src/lus/fuzzy.lus.html#266)).
   pub dy2calc_3: Dy2calc,
-  /// Call to `dy2calc` ([fuzzy.lus line 260](../src/lus/fuzzy.lus.html#260)).
+  /// Call to `dy2calc` ([fuzzy.lus line 267](../src/lus/fuzzy.lus.html#267)).
   pub dy2calc_2: Dy2calc,
-  /// Call to `dy2calc` ([fuzzy.lus line 261](../src/lus/fuzzy.lus.html#261)).
+  /// Call to `dy2calc` ([fuzzy.lus line 268](../src/lus/fuzzy.lus.html#268)).
   pub dy2calc_1: Dy2calc,
-  /// Call to `dy2calc` ([fuzzy.lus line 262](../src/lus/fuzzy.lus.html#262)).
+  /// Call to `dy2calc` ([fuzzy.lus line 269](../src/lus/fuzzy.lus.html#269)).
   pub dy2calc_0: Dy2calc,
 }
 
@@ -1062,12 +1236,12 @@ impl Sys for Dy2fuzzify {
 ///
 /// | Lustre identifier | Struct | Inputs | Outputs | Position |
 /// |:---:|:---:|:---:|:---:|:---:|
-/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_9`, `abs_11`, `input` | `abs_12` | [fuzzy.lus line 243](../src/lus/fuzzy.lus.html#243) |
-/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_7`, `abs_9`, `input` | `abs_10` | [fuzzy.lus line 242](../src/lus/fuzzy.lus.html#242) |
-/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_5`, `abs_7`, `input` | `abs_8` | [fuzzy.lus line 241](../src/lus/fuzzy.lus.html#241) |
-/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_3`, `abs_5`, `input` | `abs_6` | [fuzzy.lus line 240](../src/lus/fuzzy.lus.html#240) |
-/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_1`, `abs_3`, `input` | `abs_4` | [fuzzy.lus line 239](../src/lus/fuzzy.lus.html#239) |
-/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_0`, `abs_1`, `input` | `abs_2` | [fuzzy.lus line 238](../src/lus/fuzzy.lus.html#238) |
+/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_9`, `abs_11`, `input` | `abs_12` | [fuzzy.lus line 250](../src/lus/fuzzy.lus.html#250) |
+/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_7`, `abs_9`, `input` | `abs_10` | [fuzzy.lus line 249](../src/lus/fuzzy.lus.html#249) |
+/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_5`, `abs_7`, `input` | `abs_8` | [fuzzy.lus line 248](../src/lus/fuzzy.lus.html#248) |
+/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_3`, `abs_5`, `input` | `abs_6` | [fuzzy.lus line 247](../src/lus/fuzzy.lus.html#247) |
+/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_1`, `abs_3`, `input` | `abs_4` | [fuzzy.lus line 246](../src/lus/fuzzy.lus.html#246) |
+/// | `dy1calc` | [Dy1calc](struct.Dy1calc.html) | `abs_0`, `abs_1`, `input` | `abs_2` | [fuzzy.lus line 245](../src/lus/fuzzy.lus.html#245) |
 ///
 /// # Assertions
 ///
@@ -1114,17 +1288,17 @@ impl Sys for Dy2fuzzify {
   /// Local, invisible local: `dy1fuzzify.res.abs_0`
   pub svar_abs_0: Real,
 
-  /// Call to `dy1calc` ([fuzzy.lus line 238](../src/lus/fuzzy.lus.html#238)).
+  /// Call to `dy1calc` ([fuzzy.lus line 245](../src/lus/fuzzy.lus.html#245)).
   pub dy1calc_5: Dy1calc,
-  /// Call to `dy1calc` ([fuzzy.lus line 239](../src/lus/fuzzy.lus.html#239)).
+  /// Call to `dy1calc` ([fuzzy.lus line 246](../src/lus/fuzzy.lus.html#246)).
   pub dy1calc_4: Dy1calc,
-  /// Call to `dy1calc` ([fuzzy.lus line 240](../src/lus/fuzzy.lus.html#240)).
+  /// Call to `dy1calc` ([fuzzy.lus line 247](../src/lus/fuzzy.lus.html#247)).
   pub dy1calc_3: Dy1calc,
-  /// Call to `dy1calc` ([fuzzy.lus line 241](../src/lus/fuzzy.lus.html#241)).
+  /// Call to `dy1calc` ([fuzzy.lus line 248](../src/lus/fuzzy.lus.html#248)).
   pub dy1calc_2: Dy1calc,
-  /// Call to `dy1calc` ([fuzzy.lus line 242](../src/lus/fuzzy.lus.html#242)).
+  /// Call to `dy1calc` ([fuzzy.lus line 249](../src/lus/fuzzy.lus.html#249)).
   pub dy1calc_1: Dy1calc,
-  /// Call to `dy1calc` ([fuzzy.lus line 243](../src/lus/fuzzy.lus.html#243)).
+  /// Call to `dy1calc` ([fuzzy.lus line 250](../src/lus/fuzzy.lus.html#250)).
   pub dy1calc_0: Dy1calc,
 }
 
@@ -1397,12 +1571,12 @@ impl Sys for Dy1fuzzify {
 ///
 /// | Lustre identifier | Struct | Inputs | Outputs | Position |
 /// |:---:|:---:|:---:|:---:|:---:|
-/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_9`, `abs_11`, `input` | `abs_12` | [fuzzy.lus line 221](../src/lus/fuzzy.lus.html#221) |
-/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_7`, `abs_9`, `input` | `abs_10` | [fuzzy.lus line 220](../src/lus/fuzzy.lus.html#220) |
-/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_5`, `abs_7`, `input` | `abs_8` | [fuzzy.lus line 219](../src/lus/fuzzy.lus.html#219) |
-/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_3`, `abs_5`, `input` | `abs_6` | [fuzzy.lus line 218](../src/lus/fuzzy.lus.html#218) |
-/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_1`, `abs_3`, `input` | `abs_4` | [fuzzy.lus line 217](../src/lus/fuzzy.lus.html#217) |
-/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_0`, `abs_1`, `input` | `abs_2` | [fuzzy.lus line 216](../src/lus/fuzzy.lus.html#216) |
+/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_9`, `abs_11`, `input` | `abs_12` | [fuzzy.lus line 228](../src/lus/fuzzy.lus.html#228) |
+/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_7`, `abs_9`, `input` | `abs_10` | [fuzzy.lus line 227](../src/lus/fuzzy.lus.html#227) |
+/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_5`, `abs_7`, `input` | `abs_8` | [fuzzy.lus line 226](../src/lus/fuzzy.lus.html#226) |
+/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_3`, `abs_5`, `input` | `abs_6` | [fuzzy.lus line 225](../src/lus/fuzzy.lus.html#225) |
+/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_1`, `abs_3`, `input` | `abs_4` | [fuzzy.lus line 224](../src/lus/fuzzy.lus.html#224) |
+/// | `y2calc` | [Y2calc](struct.Y2calc.html) | `abs_0`, `abs_1`, `input` | `abs_2` | [fuzzy.lus line 223](../src/lus/fuzzy.lus.html#223) |
 ///
 /// # Assertions
 ///
@@ -1449,17 +1623,17 @@ impl Sys for Dy1fuzzify {
   /// Local, invisible local: `y2fuzzify.res.abs_0`
   pub svar_abs_0: Real,
 
-  /// Call to `y2calc` ([fuzzy.lus line 216](../src/lus/fuzzy.lus.html#216)).
+  /// Call to `y2calc` ([fuzzy.lus line 223](../src/lus/fuzzy.lus.html#223)).
   pub y2calc_5: Y2calc,
-  /// Call to `y2calc` ([fuzzy.lus line 217](../src/lus/fuzzy.lus.html#217)).
+  /// Call to `y2calc` ([fuzzy.lus line 224](../src/lus/fuzzy.lus.html#224)).
   pub y2calc_4: Y2calc,
-  /// Call to `y2calc` ([fuzzy.lus line 218](../src/lus/fuzzy.lus.html#218)).
+  /// Call to `y2calc` ([fuzzy.lus line 225](../src/lus/fuzzy.lus.html#225)).
   pub y2calc_3: Y2calc,
-  /// Call to `y2calc` ([fuzzy.lus line 219](../src/lus/fuzzy.lus.html#219)).
+  /// Call to `y2calc` ([fuzzy.lus line 226](../src/lus/fuzzy.lus.html#226)).
   pub y2calc_2: Y2calc,
-  /// Call to `y2calc` ([fuzzy.lus line 220](../src/lus/fuzzy.lus.html#220)).
+  /// Call to `y2calc` ([fuzzy.lus line 227](../src/lus/fuzzy.lus.html#227)).
   pub y2calc_1: Y2calc,
-  /// Call to `y2calc` ([fuzzy.lus line 221](../src/lus/fuzzy.lus.html#221)).
+  /// Call to `y2calc` ([fuzzy.lus line 228](../src/lus/fuzzy.lus.html#228)).
   pub y2calc_0: Y2calc,
 }
 
@@ -1732,12 +1906,12 @@ impl Sys for Y2fuzzify {
 ///
 /// | Lustre identifier | Struct | Inputs | Outputs | Position |
 /// |:---:|:---:|:---:|:---:|:---:|
-/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_9`, `abs_11`, `input` | `abs_12` | [fuzzy.lus line 204](../src/lus/fuzzy.lus.html#204) |
-/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_7`, `abs_9`, `input` | `abs_10` | [fuzzy.lus line 203](../src/lus/fuzzy.lus.html#203) |
-/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_5`, `abs_7`, `input` | `abs_8` | [fuzzy.lus line 202](../src/lus/fuzzy.lus.html#202) |
-/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_3`, `abs_5`, `input` | `abs_6` | [fuzzy.lus line 201](../src/lus/fuzzy.lus.html#201) |
-/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_1`, `abs_3`, `input` | `abs_4` | [fuzzy.lus line 200](../src/lus/fuzzy.lus.html#200) |
-/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_0`, `abs_1`, `input` | `abs_2` | [fuzzy.lus line 199](../src/lus/fuzzy.lus.html#199) |
+/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_9`, `abs_11`, `input` | `abs_12` | [fuzzy.lus line 211](../src/lus/fuzzy.lus.html#211) |
+/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_7`, `abs_9`, `input` | `abs_10` | [fuzzy.lus line 210](../src/lus/fuzzy.lus.html#210) |
+/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_5`, `abs_7`, `input` | `abs_8` | [fuzzy.lus line 209](../src/lus/fuzzy.lus.html#209) |
+/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_3`, `abs_5`, `input` | `abs_6` | [fuzzy.lus line 208](../src/lus/fuzzy.lus.html#208) |
+/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_1`, `abs_3`, `input` | `abs_4` | [fuzzy.lus line 207](../src/lus/fuzzy.lus.html#207) |
+/// | `y1calc` | [Y1calc](struct.Y1calc.html) | `abs_0`, `abs_1`, `input` | `abs_2` | [fuzzy.lus line 206](../src/lus/fuzzy.lus.html#206) |
 ///
 /// # Assertions
 ///
@@ -1784,17 +1958,17 @@ impl Sys for Y2fuzzify {
   /// Local, invisible local: `y1fuzzify.res.abs_0`
   pub svar_abs_0: Real,
 
-  /// Call to `y1calc` ([fuzzy.lus line 199](../src/lus/fuzzy.lus.html#199)).
+  /// Call to `y1calc` ([fuzzy.lus line 206](../src/lus/fuzzy.lus.html#206)).
   pub y1calc_5: Y1calc,
-  /// Call to `y1calc` ([fuzzy.lus line 200](../src/lus/fuzzy.lus.html#200)).
+  /// Call to `y1calc` ([fuzzy.lus line 207](../src/lus/fuzzy.lus.html#207)).
   pub y1calc_4: Y1calc,
-  /// Call to `y1calc` ([fuzzy.lus line 201](../src/lus/fuzzy.lus.html#201)).
+  /// Call to `y1calc` ([fuzzy.lus line 208](../src/lus/fuzzy.lus.html#208)).
   pub y1calc_3: Y1calc,
-  /// Call to `y1calc` ([fuzzy.lus line 202](../src/lus/fuzzy.lus.html#202)).
+  /// Call to `y1calc` ([fuzzy.lus line 209](../src/lus/fuzzy.lus.html#209)).
   pub y1calc_2: Y1calc,
-  /// Call to `y1calc` ([fuzzy.lus line 203](../src/lus/fuzzy.lus.html#203)).
+  /// Call to `y1calc` ([fuzzy.lus line 210](../src/lus/fuzzy.lus.html#210)).
   pub y1calc_1: Y1calc,
-  /// Call to `y1calc` ([fuzzy.lus line 204](../src/lus/fuzzy.lus.html#204)).
+  /// Call to `y1calc` ([fuzzy.lus line 211](../src/lus/fuzzy.lus.html#211)).
   pub y1calc_0: Y1calc,
 }
 
@@ -3096,6 +3270,9 @@ Options:
     inputs:  Int (x)
              Real (input)
     outputs: Real (y)
+  --limit
+    inputs:  Real (x)
+    outputs: Real (y)
   --kmlogic
     inputs:  Real (pinput)
              Real (dinput)
@@ -3104,6 +3281,7 @@ Options:
     inputs:  Real (Input)
              Real (Now)
              Real (Kp)
+             Real (Ki)
              Real (Kd)
              Real (Setpoint)
              Real (SampleTime)
@@ -3152,6 +3330,7 @@ Default system: \"compute\".\
         "--y2fuzzify" => super::Y2fuzzify::run(),
         "--dy1fuzzify" => super::Dy1fuzzify::run(),
         "--dy2fuzzify" => super::Dy2fuzzify::run(),
+        "--limit" => super::Limit::run(),
         "--kmlogic" => super::Kmlogic::run(),
         "--compute" => super::Compute::run(),
         arg => error(
@@ -3327,5 +3506,3 @@ Default system: \"compute\".\
     generic(s, |s| Real::from_str(s), "a real")
   }
 } */
-
-

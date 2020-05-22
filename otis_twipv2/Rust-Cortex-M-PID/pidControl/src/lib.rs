@@ -105,7 +105,7 @@ pub extern "C" fn InitLustreFUZ(raw_ptr: *mut fuz::Compute, input: f64, now: f64
         &mut *raw_ptr  // * derefs the pointer and returns a mutable reference to our data location
     };
 
-    let inputArray= (input, now, Kp, Kd, setpoint, sampleTime);
+    let inputArray= (input, now, Kp, Ki, Kd, setpoint, sampleTime);
 
     *PIDC_ref = fuz::Compute::read_init(inputArray)  // Place struct in deferenced location PIDC_ref
 
@@ -118,7 +118,7 @@ pub extern "C" fn ComputeLustreFUZ(raw_ptr: *mut fuz::Compute, input: f64, now: 
         assert!(!raw_ptr.is_null());
         &mut *raw_ptr
     };
-    let inputArray = (input, now, Kp, Kd, setpoint, sampleTime);
+    let inputArray = (input, now, Kp, Ki, Kd, setpoint, sampleTime);
 
     fuz::Compute::read_next(PIDC_ref, inputArray);
     let output_tuple = fuz::Compute::output(PIDC_ref); 
