@@ -1,6 +1,5 @@
 #![no_std]
-use num_traits::float::FloatCore;
-
+use crate::util::wraptopi_r;
 
 #[repr(C)]
 pub struct PIDC {
@@ -124,7 +123,7 @@ pub extern "C" fn compute_pid(Input: f64, Output: &mut f64, Setpoint: f64, Kp: f
 }
 
 
-pub extern "C" fn wraptopi_r(x: f64)-> f64{
+/*pub extern "C" fn wraptopi_r(x: f64)-> f64{
     let pi = 3.141592;
     let mut ans = x;
     ans -= (ans/(2.0*pi)).floor() * 2.0 * pi;
@@ -132,5 +131,5 @@ pub extern "C" fn wraptopi_r(x: f64)-> f64{
         ans -= 2.0 * pi;
     }
     ans
-  }
+  }*/
 
