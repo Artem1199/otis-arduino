@@ -63,7 +63,7 @@ This can be modified in the `cbindgen.toml` file.  Accessing basic Rust function
 While structures and methods require a bit more work.  The only way I was able to find ways to access a rust structure was by passing pointers to memory for example:
 <pre>
 /* in C++ */
-PID *pid_ptr = new PID; //PID is a structure in Rust, and a class in the librarie's .h file
+FUZ *fuz_ptr = new FUZ; //FUZ is a structure in Rust, and a class in the librarie's .h file
 </pre>
 
 Now that we have a Rust object, we need a way to call the Rust method, and that has to be done from Rust.  This can be done by creating a `shim` function.  This is a basic Rust function that can be called by C++ i.e.:
