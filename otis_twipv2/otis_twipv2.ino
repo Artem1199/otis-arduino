@@ -1,4 +1,4 @@
-           /*
+/*
    OTIS Two Wheeled Self Balancing Robot
    @author EThan Lew
 */
@@ -12,7 +12,7 @@
 #include <WiFiUdp.h>
 #include <utility/wifi_drv.h>
 
-#include "PID_v1.h"
+//#include "PID_v1.h"
 #include <pid_control.h>
 
 #include "Adafruit_MotorShield.h"
@@ -73,25 +73,30 @@ uint8_t dutyCycle0 = 0;
 uint8_t dutyCycle1 = 0;
 
 /* PID properties */
-double originalSetpoint = -0.0829;  //positve = falls toward fuzes
+double originalSetpoint = -0.1162;  //positive = falls toward fuses
 double setpoint = originalSetpoint;
 double movingAngleOffset = 0.1;
 double input, output;
-double errSum, lastTime, lastInput= 0, outputSum = 0;
 
 uint8_t sampleRate = 5;
 
-double Kpt = 1400;
+double Kpt = 800;
 double Kit = 24000; 
-double Kdt = -20;
+double Kdt = -24;
 
 double Kpy = 50;
 double Kiy = 40;
 double Kdy = 0;
 
-double Kpf = 6; //fuzzy logic constants
-double Kif = 30;
-double Kdf = -.03;
+double Kpf = 5;//zzy logic constants
+double Kif = 15;
+double Kdf = -.021;
+
+double Kpfy = 1;
+double Kify = 1;
+double Kdfy = -0.005;
+
+bool fuzzy_c = false;  //select which PID to use
 
 
 double setpointy = 100.0;
@@ -103,8 +108,11 @@ float prev =  0x7FFFFFFF;
 float diff = 0.0;
 
 /* Init PID controller */
-Compute *pid_ptr = new Compute;
-//Compute *pid_ptry = new Compute;
+PID *pid_ptr = new PID;
+PID *pid_ptry = new PID;
+
+FUZ *fuz_ptr = new FUZ;
+FUZ *fuz_ptry = new FUZ;
 
 /* Motor output */
 double out0, out1;
@@ -195,8 +203,13 @@ void setup() {
   fetch_ypr();
   input = ypr[1];
   inputy = ypr[0];
+  setpointy = ypr[0];
 
-  InitLustreFUZ(pid_ptr,0,millis(),setpoint,Kpf,Kif,Kdf,sampleRate);
+  InitLustreFUZ(fuz_ptr,input,millis(),setpoint,Kpf,Kif,Kdf,sampleRate);
+  InitLustreFUZ(fuz_ptry,inputy,millis(),setpointy,Kpfy,Kify,Kdfy,sampleRate);
+  
+  InitLustrePID(pid_ptr,input,millis(),setpoint,Kpt,Kit,Kdt,sampleRate);
+  InitLustrePID(pid_ptry,inputy,millis(),setpointy,Kpy,Kiy,Kdy,sampleRate);
 
 }
 /*_____________________________________________________ LOOP _______________________________________________________________*/
@@ -210,13 +223,15 @@ void loop() {
 /* detect is MPU is no longer providing safe data */  
     if (input != ypr[1]){
       WiFiDrv::digitalWrite(25, HIGH);
+      error_cnt = 99;
        } else {
         error_cnt--;
           if (error_cnt == 0){
           WiFiDrv::digitalWrite(25, LOW);
+
+          while(1){
             myMotor1->setSpeed(0);
             myMotor2->setSpeed(0);
-          while(1){
             WiFiDrv::digitalWrite(26, HIGH);
             delay(2000);
             WiFiDrv::digitalWrite(26, LOW);
@@ -228,9 +243,11 @@ void loop() {
   inputy = ypr[0];
 
 
-  if (setpointy > 4.0) {
-    setpointy = ypr[0];
-  }
+  //if (setpointy > 4.0) {
+ //   setpointy = ypr[0];
+  //}
+
+
 
 
  /* if (Serial.available() > 0)
@@ -275,31 +292,42 @@ void loop() {
     }
   }*/
 
-    
-  output = ComputeLustreFUZ(pid_ptr, input, millis(),setpoint,Kpf,Kif,Kdf,sampleRate) * 230.0;
 
+  float outputf = ComputeLustreFUZ(fuz_ptr, input, millis(),setpoint,Kpf,Kif,Kdf,sampleRate) * 255.0;
+  //outputy = ComputeLustreFUZ(fuz_ptry, inputy, millis(),setpointy,Kpfy,Kify,Kdfy,sampleRate) * 30.0;
+
+  float outputp = ComputeLustrePID(pid_ptr,input,millis(),setpoint,Kpt,Kit,Kdt,sampleRate);
+ // outputy = ComputeLustrePID(pid_ptry,inputy,millis(),setpointy,Kpy,Kiy,Kdy,sampleRate);
   out0 = output - outputy;
   out1 = output + outputy;
 
+  if (fuzzy_c){
+    output = outputf;
+    WiFiDrv::digitalWrite(27, HIGH);
+  } else {
+    WiFiDrv::digitalWrite(27, LOW);
+    output = outputp;
+  }
 
- /* if (out0 > 0.0) {
+  
+  if (out0 > 0.0) {
      myMotor1->run(BACKWARD);
   } else {
     myMotor1->run(FORWARD);
   }
   if (out1 > 0.0) {
-     myMotor2->run(FORWARD);
+     myMotor2->run(BACKWARD);
   } else {
-    myMotor2->run(BACKWARD);
-  }*/
+    myMotor2->run(FORWARD);
+  }
 
-  if (output > 0.0) {
+ /* if (output > 0.0) {
      myMotor1->run(BACKWARD);
      myMotor2->run(BACKWARD);
   } else {
     myMotor1->run(FORWARD);
     myMotor2->run(FORWARD);
-  }
+  }*/
   
 
 
@@ -308,9 +336,9 @@ void loop() {
  // dutyCycle0 = (uint8_t)duty_mag0;
   //dutyCycle1 = (uint8_t)duty_mag1;
 
-  if (fabs(input) < 0.5) {
-    myMotor1->setSpeed(round(fabs(output)));
-    myMotor2->setSpeed(round(fabs(output)));
+  if (fabs(input) < 0.6) {
+    myMotor1->setSpeed(round(fabs(out0)));
+    myMotor2->setSpeed(round(fabs(out1)));
 
   } else {
   myMotor1->setSpeed(0);
@@ -318,7 +346,10 @@ void loop() {
   }
 
 #ifdef WIFI
+ //if (millis() - postDelay > 2){
+ //   postDelay = millis();
   wifi_communication(ypr[1] - setpoint, ypr[0] - setpointy, output, outputy);
+ //}
 #endif
 
     WiFiDrv::digitalWrite(25, LOW);
@@ -335,7 +366,7 @@ void initialize_ypr() {
   /* Initialize the DMP */
   Serial.println(F("Initializing DMP..."));
   devStatus = mpu.dmpInitialize();
-  mpu.setRate(sampleRate); //Set sampling rate to 1000/(1+9)
+  mpu.setRate(sampleRate - 1); //Set sampling rate to 1000/(1+9)
   //uint8_t a = 1;
   //mpu.dmpSetFIFORate(a);
   /* Set the device biases appropiately */
@@ -445,7 +476,6 @@ void initialize_wifi(){
   
   return;
 }
-
 void printWiFiStatus() {
   // print the SSID of the network you're attached to:
   Serial.print("SSID: ");
@@ -463,20 +493,50 @@ void printWiFiStatus() {
   Serial.println(" dBm");
 }
 
+
+
+#ifdef WIFI
+double f_setpoint = originalSetpoint - .03;
+double b_setpoint = originalSetpoint + .03;
+
 void wifi_communication(double pitch_err, double yaw_err, double output, double outputy) {
   
-  #ifdef WIFI
-   uint16_t send_p = ((pitch_err + 3.14)*10436);
-   uint16_t send_y = ((yaw_err + 3.14)*10436);
+   uint16_t send_p = ((ypr[1] + 3.141592)*10436.381);
+   uint16_t send_y = ((yaw_err + 3.141592)*10436.381);
    uint16_t send_o = (output+1000) * 33;
    uint16_t send_g = (outputy+1000) * 33;
   
     uint8_t sendarray[]= {send_p & 0xff, send_p >> 8, send_y & 0xff, send_y >> 8,send_o & 0xff, send_o >> 8,send_g & 0xff, send_g >> 8, };
-  #endif
-
-    if (millis() - postDelay > 10){
+      
         client.write(sendarray, 8);
-        postDelay = millis();        
-  }
 
+     if (client.available()){
+        uint8_t c =  client.read(); 
+        if (c == 1){
+          
+              setpoint = f_setpoint;
+        }
+        if (c == 2){                
+              setpoint = b_setpoint;
+        }
+        if (c == 3){
+          setpoint = originalSetpoint;
+        }
+        if (c == 4){
+          setpointy = setpointy + 0.005;
+        }
+        if (c == 5){
+          setpointy = setpointy - 0.005;
+        } 
+        if (c == 6){
+          fuzzy_c = false;
+        }
+        if (c == 7){
+          fuzzy_c = true;
+        }
+          Serial.print(c);
+          Serial.println(setpoint, 4);
+      }
+  
 };
+#endif
