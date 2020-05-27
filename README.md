@@ -103,3 +103,8 @@ This function is the initialization of the structure, so we derefence the mutabl
 This same process is used for other methods like the PID or Fuzzy logic calculations where we return a floating point result value.
 
 **If you find a better way to access Rust structs from C++ then pls let me know.  Thanks!
+
+
+## Dealing with the MKR1010
+1. One of the most useful tricks I've found when uploading code is quickly pressing the reset button **twice**, I have gotten into a habit of doing this everytime I upload, because it often hangs up if I don't.
+2. The MKR1010 board has a habit of handing up when communicating with the MPU6050.  This can be scary because it will leave the motors on, and just run away!  I suspect this occurs because the MPU6050 has too many buffer overflows, and fails.  I tried adding some pullup resistors to the I2C lines try help reduce this issue.  It seems like it's more common when using `Serial.print()` functions.
