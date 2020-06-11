@@ -63,7 +63,7 @@ This can be modified in the `cbindgen.toml` file.  Accessing basic Rust function
 While structures and methods require a bit more work.  The only way I was able to find ways to access a rust structure was by passing pointers to memory for example:
 <pre>
 /* in C++ */
-PID *pid_ptr = new PID; //PID is a structure in Rust, and a class in the librarie's .h file
+FUZ *fuz_ptr = new FUZ; //FUZ is a structure in Rust, and a class in the librarie's .h file
 </pre>
 
 Now that we have a Rust object, we need a way to call the Rust method, and that has to be done from Rust.  This can be done by creating a `shim` function.  This is a basic Rust function that can be called by C++ i.e.:
@@ -107,4 +107,5 @@ This same process is used for other methods like the PID or Fuzzy logic calculat
 
 ## Dealing with the MKR1010
 1. One of the most useful tricks I've found when uploading code is quickly pressing the reset button **twice**, I have gotten into a habit of doing this everytime I upload, because it often hangs up if I don't.
-2. The MKR1010 board has a habit of handing up when communicating with the MPU6050.  This can be scary because it will leave the motors on, and just run away!  I suspect this occurs because the MPU6050 has too many buffer overflows, and fails.  I tried adding some pullup resistors to the I2C lines try help reduce this issue.  It seems like it's more common when using `Serial.print()` functions.
+2. The MKR1010 board has a habit of hanging up when communicating with the MPU6050.  This can be scary because it will leave the motors on, and just run away!  I suspect this occurs because the MPU6050 has too many buffer overflows, and fails.  I tried adding some pullup resistors to the I2C lines try help reduce this issue.  It seems like it's more common when using `Serial.print()` functions.
+   1. **After some testing I found that using Serial.print() results in hang ups after only a 1-2 minutes.**  While with wireless data transfer it is able to run without issues for up to 30 minutes at a time. This board does not support BluetoothSerial, so BluetoothBLE or Wifi are the only options. The 2019 group, Ethan implemented BluetoothSerial data for the original ESP-32 board, I implemented wifi for the MKR1010 in [Artem1199/otis-tcp](https://github.com/Artem1199/otis-tcp/tree/213521e0492a6fb77247b8a0346dc709985c218d) using Rust.
