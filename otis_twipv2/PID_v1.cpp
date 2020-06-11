@@ -1,5 +1,5 @@
 /**********************************************************************************************
- * Arduino PID Library - Version 1.2.1
+ * Arduino PIDb Library - Version 1.2.1
  * by Brett Beauregard <br3ttb@gmail.com> brettbeauregard.com
  *
  * This Library is licensed under the MIT License
@@ -17,7 +17,7 @@
  *    The parameters specified here are those for for which we can't set up
  *    reliable defaults, so we need to have the user set them.
  ***************************************************************************/
-PID::PID(double* Input, double* Output, double* Setpoint,
+PIDb::PIDb(double* Input, double* Output, double* Setpoint,
         double Kp, double Ki, double Kd, int POn, int ControllerDirection)
 {
     myOutput = Output;
@@ -25,13 +25,13 @@ PID::PID(double* Input, double* Output, double* Setpoint,
     mySetpoint = Setpoint;
     inAuto = false;
 
-    PID::SetOutputLimits(0, 255);				//default output limit corresponds to
+    PIDb::SetOutputLimits(0, 255);				//default output limit corresponds to
 												//the arduino pwm limits
 
     SampleTime = 100;							//default Controller Sample Time is 0.1 seconds
 
-    PID::SetControllerDirection(ControllerDirection);
-    PID::SetTunings(Kp, Ki, Kd, POn);
+    PIDb::SetControllerDirection(ControllerDirection);
+    PIDb::SetTunings(Kp, Ki, Kd, POn);
 
     lastTime = millis()-SampleTime;
 }
@@ -41,9 +41,9 @@ PID::PID(double* Input, double* Output, double* Setpoint,
  *    to use Proportional on Error without explicitly saying so
  ***************************************************************************/
 
-PID::PID(double* Input, double* Output, double* Setpoint,
+PIDb::PIDb(double* Input, double* Output, double* Setpoint,
         double Kp, double Ki, double Kd, int ControllerDirection)
-    :PID::PID(Input, Output, Setpoint, Kp, Ki, Kd, P_ON_E, ControllerDirection)
+    :PIDb::PIDb(Input, Output, Setpoint, Kp, Ki, Kd, P_ON_E, ControllerDirection)
 {
 
 }
@@ -52,10 +52,10 @@ PID::PID(double* Input, double* Output, double* Setpoint,
 /* Compute() **********************************************************************
  *     This, as they say, is where the magic happens.  this function should be called
  *   every time "void loop()" executes.  the function will decide for itself whether a new
- *   pid Output needs to be computed.  returns true when the output is computed,
+ *   PIDb Output needs to be computed.  returns true when the output is computed,
  *   false when nothing has been done.
  **********************************************************************************/
-bool PID::Compute(unsigned long now)
+bool PIDb::Compute(unsigned long now)
 {
    if(!inAuto) return false;
    //unsigned long now = millis();
@@ -64,10 +64,9 @@ bool PID::Compute(unsigned long now)
    {
       /*Compute all the working error variables*/
       double input = *myInput;
-      /* elew */
-      double error = wraptopi(*mySetpoint - input);
+      double error = *mySetpoint - input;
       double dInput = (input - lastInput);
-      outputSum += (ki * error);
+      outputSum+= (ki * error);
 
       /*Add Proportional on Measurement, if P_ON_M is specified*/
       if(!pOnE) outputSum-= kp * dInput;
@@ -76,22 +75,21 @@ bool PID::Compute(unsigned long now)
       else if(outputSum < outMin) outputSum= outMin;
 
       /*Add Proportional on Error, if P_ON_E is specified*/
-	   double output;
+     double output;
       if(pOnE) output = kp * error;
       else output = 0;
 
       /*Compute Rest of PID Output*/
       output += outputSum - kd * dInput;
 
-	    if(output > outMax) output = outMax;
-      else if(output < outMin) output= outMin;
-	    *myOutput = output;
+      if(output > outMax) output = outMax;
+      else if(output < outMin) output = outMin;
+      *myOutput = output;
 
       /*Remember some variables for next time*/
       lastInput = input;
       lastTime = now;
-	    return true;
-
+      return true;
 
    }
    else return false;
@@ -102,7 +100,7 @@ bool PID::Compute(unsigned long now)
  * it's called automatically from the constructor, but tunings can also
  * be adjusted on the fly during normal operation
  ******************************************************************************/
-void PID::SetTunings(double Kp, double Ki, double Kd, int POn)
+void PIDb::SetTunings(double Kp, double Ki, double Kd, int POn)
 {
    if (Kp<0 || Ki<0 || Kd<0) return;
 
@@ -127,14 +125,14 @@ void PID::SetTunings(double Kp, double Ki, double Kd, int POn)
 /* SetTunings(...)*************************************************************
  * Set Tunings using the last-rembered POn setting
  ******************************************************************************/
-void PID::SetTunings(double Kp, double Ki, double Kd){
+void PIDb::SetTunings(double Kp, double Ki, double Kd){
     SetTunings(Kp, Ki, Kd, pOn); 
 }
 
 /* SetSampleTime(...) *********************************************************
  * sets the period, in Milliseconds, at which the calculation is performed
  ******************************************************************************/
-void PID::SetSampleTime(int NewSampleTime)
+void PIDb::SetSampleTime(int NewSampleTime)
 {
    if (NewSampleTime > 0)
    {
@@ -154,7 +152,7 @@ void PID::SetSampleTime(int NewSampleTime)
  *  want to clamp it from 0-125.  who knows.  at any rate, that can all be done
  *  here.
  **************************************************************************/
-void PID::SetOutputLimits(double Min, double Max)
+void PIDb::SetOutputLimits(double Min, double Max)
 {
    if(Min >= Max) return;
    outMin = Min;
@@ -175,12 +173,12 @@ void PID::SetOutputLimits(double Min, double Max)
  * when the transition from manual to auto occurs, the controller is
  * automatically initialized
  ******************************************************************************/
-void PID::SetMode(int Mode)
+void PIDb::SetMode(int Mode)
 {
     bool newAuto = (Mode == AUTOMATIC);
     if(newAuto && !inAuto)
     {  /*we just went from manual to auto*/
-        PID::Initialize();
+        PIDb::Initialize();
     }
     inAuto = newAuto;
 }
@@ -189,7 +187,7 @@ void PID::SetMode(int Mode)
  *	does all the things that need to happen to ensure a bumpless transfer
  *  from manual to automatic mode.
  ******************************************************************************/
-void PID::Initialize()
+void PIDb::Initialize()
 {
    outputSum = *myOutput;
    lastInput = *myInput;
@@ -198,12 +196,12 @@ void PID::Initialize()
 }
 
 /* SetControllerDirection(...)*************************************************
- * The PID will either be connected to a DIRECT acting process (+Output leads
+ * The PIDb will either be connected to a DIRECT acting process (+Output leads
  * to +Input) or a REVERSE acting process(+Output leads to -Input.)  we need to
  * know which one, because otherwise we may increase the output when we should
  * be decreasing.  This is called from the constructor.
  ******************************************************************************/
-void PID::SetControllerDirection(int Direction)
+void PIDb::SetControllerDirection(int Direction)
 {
    if(inAuto && Direction !=controllerDirection)
    {
@@ -214,21 +212,21 @@ void PID::SetControllerDirection(int Direction)
    controllerDirection = Direction;
 }
 
-void PID::ResetI()
+void PIDb::ResetI()
 {
 	outputSum = 0;
 }
 
 /* Status Funcions*************************************************************
  * Just because you set the Kp=-1 doesn't mean it actually happened.  these
- * functions query the internal state of the PID.  they're here for display
- * purposes.  this are the functions the PID Front-end uses for example
+ * functions query the internal state of the PIDb.  they're here for display
+ * purposes.  this are the functions the PIDb Front-end uses for example
  ******************************************************************************/
-double PID::GetKp(){ return  dispKp; }
-double PID::GetKi(){ return  dispKi;}
-double PID::GetKd(){ return  dispKd;}
-int PID::GetMode(){ return  inAuto ? AUTOMATIC : MANUAL;}
-int PID::GetDirection(){ return controllerDirection;}
+double PIDb::GetKp(){ return  dispKp; }
+double PIDb::GetKi(){ return  dispKi;}
+double PIDb::GetKd(){ return  dispKd;}
+int PIDb::GetMode(){ return  inAuto ? AUTOMATIC : MANUAL;}
+int PIDb::GetDirection(){ return controllerDirection;}
 
 /* elew */
 double wraptopi(double x){

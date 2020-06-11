@@ -559,7 +559,7 @@ impl Sys for Limit {
     let svar_x = input.0 ;
     
     // |===| Computing initial state.
-    let svar_y = ( if (svar_x > 230f64) { 230f64 } else {( if (svar_x < - 230f64) { - 230f64 } else {svar_x } ) } ) ;
+    let svar_y = ( if (svar_x > 255f64) { 255f64 } else {( if (svar_x < - 255f64) { - 255f64 } else {svar_x } ) } ) ;
     
     // |===| Checking assertions.
     
@@ -587,7 +587,7 @@ impl Sys for Limit {
     let svar_x = input.0 ;
     
     // |===| Computing next state.
-    let svar_y = ( if (svar_x > 230f64) { 230f64 } else {( if (svar_x < - 230f64) { - 230f64 } else {svar_x } ) } ) ;
+    let svar_y = ( if (svar_x > 255f64) { 255f64 } else {( if (svar_x < - 255f64) { - 255f64 } else {svar_x } ) } ) ;
     
     // |===| Checking assertions.
     

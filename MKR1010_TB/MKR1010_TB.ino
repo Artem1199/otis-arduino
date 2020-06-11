@@ -1,4 +1,4 @@
-           /*
+     /*
    OTIS Two Wheeled Self Balancing Robot
    @author EThan Lew
 */
@@ -6,9 +6,10 @@
 
 #include <Wire.h>
 #include "I2Cdev.h"
+#include "Adafruit_MotorShield.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "SAMD21turboPWM.h"
-#include "PID_v1.h" //cpp library for testing
+//#include "PID_v1.h" //cpp library for testing
 #include "Secrets.h"
 
 #include <WiFiNINA.h>                                 
@@ -16,6 +17,8 @@
 #include <utility/wifi_drv.h>
 #include <pid_control.h>
 
+
+uint8_t sampleRate = 5;
 
 #define DEBUG 
 /* MACROS */
@@ -37,6 +40,11 @@ bool data_sent = false;
 /* System Tuning */
 uint16_t accel_bias[] = {-752, -2120, 1234};
 uint16_t gyro_bias[] = {18, 2, -51};
+
+
+Adafruit_MotorShield AFMS = Adafruit_MotorShield();
+Adafruit_DCMotor *myMotor1 = AFMS.getMotor(1);   // Boost/Buck converter side motor
+Adafruit_DCMotor *myMotor2 = AFMS.getMotor(2);   // Adafruit shield side motor
 
 /* MPU6050 Device Context */
 MPU6050 mpu;
@@ -68,7 +76,7 @@ void dmpDataReady() {
 }
 
 /* Setting PWM properties */
-const int freq = 30000;
+const int freq = 1600;
 const int pwmChannel0 = 0;
 const int pwmChannel1 = 1;
 const int resolution = 8;
@@ -99,8 +107,8 @@ double setpointy = 100.0;
 double inputy, outputy;
 double inputy_old, outputy_old;
 
-PID pidTilt(&input, &output, &setpoint, Kpt, Kit, Kdt, DIRECT);
-PID pidYaw(&inputy, &outputy, &setpointy, Kpy, Kiy, Kdy, DIRECT);
+//PID pidTilt(&input, &output, &setpoint, Kpt, Kit, Kdt, DIRECT);
+//PID pidYaw(&inputy, &outputy, &setpointy, Kpy, Kiy, Kdy, DIRECT);
 
 double errSumy, lastTimey, lastInputy = 0, outputSumy = 0;
 //PID pidTilt(&input, &output_old, &setpoint, Kpt, Kit, Kdt, DIRECT);
@@ -130,7 +138,9 @@ String serBuff = "";
 
 #define IS_SERVER
 
-
+/* Init PID controller */
+PID *pid_ptr = new PID;
+PID *pid_ptry = new PID;
 
 int status = WL_IDLE_STATUS; 
 
@@ -155,15 +165,17 @@ void setup() {
   WiFiDrv::pinMode(26, OUTPUT); //RED
   WiFiDrv::pinMode(27, OUTPUT); //BLUE
   WiFiDrv::digitalWrite(26, HIGH); // for full brightness
+  
+
 
   /* Setup PID */
-  pidTilt.SetMode(AUTOMATIC);
-  pidTilt.SetSampleTime(10);
-  pidTilt.SetOutputLimits(-255, 255); 
+//  pidTilt.SetMode(AUTOMATIC);
+//  pidTilt.SetSampleTime(10);
+//  pidTilt.SetOutputLimits(-255, 255); 
 
-  pidYaw.SetMode(AUTOMATIC);
-  pidYaw.SetSampleTime(10);
-  pidYaw.SetOutputLimits(-255, 255);
+//  pidYaw.SetMode(AUTOMATIC);
+//  pidYaw.SetSampleTime(10);
+//  pidYaw.SetOutputLimits(-255, 255);
 
   digitalWrite(12, LOW);
   digitalWrite(13, LOW);
@@ -197,8 +209,13 @@ void setup() {
   input = ypr[1];
   inputy = ypr[0];
 
+  AFMS.begin(freq);
+
   WiFiDrv::digitalWrite(27, LOW); // for full brightness
   WiFiDrv::digitalWrite(25, HIGH); // for full brightness
+
+  InitLustrePID(pid_ptr,input,millis(),setpoint,Kpt,Kit,Kdt,sampleRate);
+  InitLustrePID(pid_ptry,inputy,millis(),setpointy,Kpy,Kiy,Kdy,sampleRate);
 
 }
 
@@ -227,16 +244,17 @@ void loop() {
     setpointy = ypr[0];
   }
 
-  pidTilt.Compute();
-  pidYaw.Compute();
+//  pidTilt.Compute();
+//  pidYaw.Compute();
 
   Serial.print(" p: ");
   Serial.print(ypr[1]);
-  Serial.print(" o0: ");
+  Serial.print(" out0: ");
   Serial.print(out0);
+
+  float output = ComputeLustrePID(pid_ptr,input,millis(),setpoint,Kpt,Kit,Kdt,sampleRate);
   
-  
-  out0 = output;
+  out0 = 215;
   out1 = output + outputy;
 
 
@@ -252,17 +270,21 @@ void loop() {
     digitalWrite(DR1, false);
   }
 
-  double duty_mag0 = abs(255.0 / 50.0 * min((double)50, abs(out0)));
-  double duty_mag1 = abs(1000.0 / 50.0 * min((double)50, abs(out1)));
+ // double duty_mag0 = abs(255.0 / 50.0 * min((double)50, abs(out0)));
+ // double duty_mag1 = abs(1000.0 / 50.0 * min((double)50, abs(out1)));
 
-  duty_mag0 = map(duty_mag0, 0, 255, 0, 1000);
-  Serial.print(" DC: ");
-  Serial.print((duty_mag0/1000.0)*100);
+  double duty_mag0 = map(out0, 0, 255, 0, 1000);
+ // Serial.print(" DC: ");
+ // Serial.print((duty_mag0/1000.0)*100);
+
+  
   
    Serial.print(" Time: ");
+  myMotor1->run(FORWARD);
+  myMotor2->run(FORWARD);
+  myMotor2->setSpeed(out0);
 
-
-  pwm.analogWrite(PWM0, duty_mag0);
+  pwm.analogWrite(PWM1, duty_mag0);
 
 
     WiFiDrv::digitalWrite(25, LOW);
@@ -292,10 +314,10 @@ void initialize_pwm() {
 
 
   pwm.setClockDivider(1, false); //
-  pwm.timer(1, 1, 800, false); //timer x, prescaler, steps resolution
+  pwm.timer(1, 1, 16000, false); //timer x, prescaler, steps resolution
   
   pwm.setClockDivider(0, false); //
-  pwm.timer(0, 1, 800, false); //timer 
+  pwm.timer(0, 1, 16000, false); //timer 
 }
 
 /*_____________________________________________________ IMU _______________________________________________________________*/
@@ -308,7 +330,7 @@ void initialize_ypr() {
   /* Initialize the DMP */
   Serial.println(F("Initializing DMP..."));
   devStatus = mpu.dmpInitialize();
-  mpu.setRate(9); //Set sampling rate to 1000/(1+9)
+  mpu.setRate(sampleRate - 1); //Set sampling rate to 1000/(1+9)
   //uint8_t a = 1;
   //mpu.dmpSetFIFORate(a);
   /* Set the device biases appropiately */

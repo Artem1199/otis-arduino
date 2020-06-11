@@ -1,8 +1,8 @@
-#ifndef PID_v1_h
-#define PID_v1_h
+#ifndef PIDb_v1_h
+#define PIDb_v1_h
 #define LIBRARY_VERSION	1.2.1
 
-class PID
+class PIDb
 {
 
 
@@ -17,16 +17,16 @@ class PID
   #define P_ON_E 1
 
   //commonly used functions **************************************************************************
-    PID(double*, double*, double*,        // * constructor.  links the PID to the Input, Output, and 
+    PIDb(double*, double*, double*,        // * constructor.  links the PIDb to the Input, Output, and 
         double, double, double, int, int);//   Setpoint.  Initial tuning parameters are also set here.
                                           //   (overload for specifying proportional mode)
 
-    PID(double*, double*, double*,        // * constructor.  links the PID to the Input, Output, and 
+    PIDb(double*, double*, double*,        // * constructor.  links the PIDb to the Input, Output, and 
         double, double, double, int);     //   Setpoint.  Initial tuning parameters are also set here
 	
-    void SetMode(int Mode);               // * sets PID to either Manual (0) or Auto (non-0)
+    void SetMode(int Mode);               // * sets PIDb to either Manual (0) or Auto (non-0)
 
-    bool Compute(unsigned long now);                       // * performs the PID calculation.  it should be
+    bool Compute(unsigned long now);                       // * performs the PIDb calculation.  it should be
                                           //   called every time loop() cycles. ON/OFF and
                                           //   calculation frequency can be set using SetMode
                                           //   SetSampleTime respectively
@@ -49,17 +49,17 @@ class PID
 										  //   means the opposite.  it's very unlikely that this will be needed
 										  //   once it is set in the constructor.
     void SetSampleTime(int);              // * sets the frequency, in Milliseconds, with which 
-                                          //   the PID calculation is performed.  default is 100
+                                          //   the PIDb calculation is performed.  default is 100
 										  
 	void ResetI();
 										  
 										  
 										  
   //Display functions ****************************************************************
-	double GetKp();						  // These functions query the pid for interal values.
-	double GetKi();						  //  they were created mainly for the pid front-end,
+	double GetKp();						  // These functions query the PIDb for interal values.
+	double GetKi();						  //  they were created mainly for the PIDb front-end,
 	double GetKd();						  // where it's important to know what is actually 
-	int GetMode();						  //  inside the PID.
+	int GetMode();						  //  inside the PIDb.
 	int GetDirection();					  //
 
   private:
@@ -78,7 +78,7 @@ class PID
 
     double *myInput;              // * Pointers to the Input, Output, and Setpoint variables
     double *myOutput;             //   This creates a hard link between the variables and the 
-    double *mySetpoint;           //   PID, freeing the user from having to constantly tell us
+    double *mySetpoint;           //   PIDb, freeing the user from having to constantly tell us
                                   //   what these values are.  with pointers we'll just know.
 			  
 	unsigned long lastTime;
